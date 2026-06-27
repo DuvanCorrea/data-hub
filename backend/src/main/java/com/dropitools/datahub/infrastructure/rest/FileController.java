@@ -13,6 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.Map;
 
 import com.dropitools.datahub.infrastructure.rest.dto.ApiResponse;
+import com.dropitools.datahub.infrastructure.rest.dto.FileUploadResponse;
 
 @RestController
 @RequestMapping("/api/files")
@@ -22,13 +23,13 @@ public class FileController {
     private final FileImportService fileImportService;
 
     @PostMapping("/upload")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> upload(
+    public ResponseEntity<ApiResponse<FileUploadResponse>> upload(
             @RequestParam("file") MultipartFile file,
             @AuthenticationPrincipal UserPrincipal principal) {
         try {
             ImportJobEntity job = fileImportService.upload(file, principal.getTenantId(), principal.getId());
             return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(ApiResponse.created(Map.of("jobId", job.getId(), "fileId", job.getFileId()), "Archivo recibido, procesando."));
+                    .body(ApiResponse.created(new FileUploadResponse(job.getId(), job.getFileId()), "Archivo recibido, procesando."));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

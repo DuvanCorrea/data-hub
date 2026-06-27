@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.dropitools.datahub.infrastructure.rest.dto.ApiResponse;
+import com.dropitools.datahub.infrastructure.rest.dto.ImportJobDto;
 
 @RestController
 @RequestMapping("/api/import-jobs")
@@ -22,7 +23,7 @@ public class ImportJobController {
     private final FileImportService fileImportService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<Page<Map<String, Object>>>> list(
+    public ResponseEntity<ApiResponse<Page<ImportJobDto>>> list(
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestParam Optional<String> status,
             @RequestParam(defaultValue = "0") int page,
@@ -33,7 +34,7 @@ public class ImportJobController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getById(
+    public ResponseEntity<ApiResponse<ImportJobDto>> getById(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long id) {
 
@@ -43,19 +44,20 @@ public class ImportJobController {
 
     // ── DTO inline ───────────────────────────────────────────────────────────
 
-    private Map<String, Object> toDto(ImportJobEntity j) {
+    private ImportJobDto toDto(ImportJobEntity j) {
         int progress = (j.getRowsTotal() != null && j.getRowsTotal() > 0)
                 ? j.getRowsDone() * 100 / j.getRowsTotal() : 0;
-        return Map.of(
-                "id", j.getId(),
-                "status", j.getStatus(),
-                "progress", progress,
-                "rowsDone", j.getRowsDone(),
-                "rowsTotal", j.getRowsTotal() != null ? j.getRowsTotal() : 0,
-                "template", j.getTemplate(),
-                "startedAt", j.getStartedAt() != null ? j.getStartedAt().toString() : "",
-                "finishedAt", j.getFinishedAt() != null ? j.getFinishedAt().toString() : "",
-                "errorMsg", j.getErrorMsg() != null ? j.getErrorMsg() : ""
-        );
+                
+        return ImportJobDto.builder()
+                .id(j.getId())
+                .status(j.getStatus())
+                .progress(progress)
+                .rowsDone(j.getRowsDone())
+                .rowsTotal(j.getRowsTotal() != null ? j.getRowsTotal() : 0)
+                .template(j.getTemplate())
+                .startedAt(j.getStartedAt() != null ? j.getStartedAt().toString() : "")
+                .finishedAt(j.getFinishedAt() != null ? j.getFinishedAt().toString() : "")
+                .errorMsg(j.getErrorMsg() != null ? j.getErrorMsg() : "")
+                .build();
     }
 }

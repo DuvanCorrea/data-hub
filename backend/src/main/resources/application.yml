@@ -1,0 +1,65 @@
+# ── application.yml ──────────────────────────────────────────
+# Los valores sensibles se inyectan desde .env vía Docker Compose
+# o desde el entorno local en desarrollo.
+
+spring:
+  application:
+    name: data-hub-backend
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:datahub}
+    username: ${DB_USERNAME:datahub_user}
+    password: ${DB_PASSWORD:changeme_db}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 20000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate          # Flyway gestiona el schema; Hibernate solo valida
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: ${MAX_FILE_SIZE:50MB}
+      max-request-size: ${MAX_REQUEST_SIZE:52MB}
+
+# ── Server ────────────────────────────────────────────────────
+server:
+  port: 8080
+  error:
+    include-message: always
+
+# ── JWT ───────────────────────────────────────────────────────
+jwt:
+  secret: ${JWT_SECRET:default_secret_only_for_local_dev_change_in_prod}
+  expiration-ms: ${JWT_EXPIRATION_MS:3600000}
+
+# ── Storage ───────────────────────────────────────────────────
+app:
+  storage:
+    path: ${FILES_STORAGE_PATH:/app/files}
+  scheduler:
+    fixed-delay-ms: ${JOB_SCHEDULER_FIXED_DELAY_MS:2000}
+    orphan-timeout-minutes: ${JOB_ORPHAN_TIMEOUT_MINUTES:10}
+  rate-limit:
+    requests-per-minute: ${RATE_LIMIT_REQUESTS_PER_MINUTE:100}
+
+# ── Logging ───────────────────────────────────────────────────
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSZ} [%thread] %-5level %logger{36} - %msg%n"
+  level:
+    root: INFO
+    com.dropitools: DEBUG

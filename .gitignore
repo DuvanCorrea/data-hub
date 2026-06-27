@@ -1,0 +1,29 @@
+# ── Entorno ───────────────────────────────────────────────────
+.env
+*.env.local
+
+# ── Java / Maven ─────────────────────────────────────────────
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+backend/*.class
+
+# ── Node / Frontend ───────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# ── IntelliJ / VS Code ────────────────────────────────────────
+.idea/
+*.iml
+.vscode/
+
+# ── Docker ────────────────────────────────────────────────────
+# Los archivos de datos de Postgres no van a git
+postgres-data/
+
+# ── Archivos Excel subidos (almacenamiento local en dev) ──────
+files/
+
+# ── OS ────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db

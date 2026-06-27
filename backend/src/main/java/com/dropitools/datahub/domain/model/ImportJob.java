@@ -23,7 +23,7 @@ public class ImportJob {
     private Long tenantId;
     private Long fileId;
     private String template;
-    private Status status;
+    private String status; // PENDING | RUNNING | COMPLETED | ERROR
     private Integer rowsTotal;
     private int rowsDone;
     private String errorMsg;

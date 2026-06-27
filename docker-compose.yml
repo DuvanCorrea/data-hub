@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
 
   # ── Base de datos ─────────────────────────────────────────────
@@ -8,15 +6,15 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-datahub}
+      POSTGRES_USER: ${POSTGRES_USER:-datahub_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_db}
     volumes:
       - db_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"          # expuesto solo para dev; quitar en prod
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-datahub_user} -d ${POSTGRES_DB:-datahub}"]
       interval: 10s
       retries: 5
       start_period: 20s
@@ -29,22 +27,22 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:${DB_PORT}/${DB_NAME}
-      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS}
-      SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE: ${MAX_FILE_SIZE}
-      SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE: ${MAX_REQUEST_SIZE}
-      FILES_STORAGE_PATH: ${FILES_STORAGE_PATH}
-      JOB_SCHEDULER_FIXED_DELAY_MS: ${JOB_SCHEDULER_FIXED_DELAY_MS}
-      JOB_ORPHAN_TIMEOUT_MINUTES: ${JOB_ORPHAN_TIMEOUT_MINUTES}
-      RATE_LIMIT_REQUESTS_PER_MINUTE: ${RATE_LIMIT_REQUESTS_PER_MINUTE}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:${DB_PORT:-5432}/${DB_NAME:-datahub}
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-datahub_user}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-changeme_db}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      JWT_SECRET: ${JWT_SECRET:-default_secret_only_for_local_dev_change_in_prod}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-3600000}
+      SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE: ${MAX_FILE_SIZE:-50MB}
+      SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE: ${MAX_REQUEST_SIZE:-52MB}
+      FILES_STORAGE_PATH: ${FILES_STORAGE_PATH:-/app/files}
+      JOB_SCHEDULER_FIXED_DELAY_MS: ${JOB_SCHEDULER_FIXED_DELAY_MS:-5000}
+      JOB_ORPHAN_TIMEOUT_MINUTES: ${JOB_ORPHAN_TIMEOUT_MINUTES:-10}
+      RATE_LIMIT_REQUESTS_PER_MINUTE: ${RATE_LIMIT_REQUESTS_PER_MINUTE:-100}
     ports:
-      - "${APP_PORT}:8080"
+      - "${APP_PORT:-8080}:8080"
     volumes:
-      - files_data:${FILES_STORAGE_PATH}
+      - files_data:${FILES_STORAGE_PATH:-/app/files}
     depends_on:
       db:
         condition: service_healthy
@@ -57,9 +55,9 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
     ports:
-      - "${FRONTEND_PORT}:5173"
+      - "${FRONTEND_PORT:-5173}:5173"
     depends_on:
       - backend
     volumes:

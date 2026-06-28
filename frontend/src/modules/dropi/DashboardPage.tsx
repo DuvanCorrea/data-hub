@@ -1,297 +1,403 @@
 // ─── DashboardPage (modules/dropi/DashboardPage.tsx) ─────────────────────────
-import { useEffect, useState } from "react";
+// Layout basado en el mockup: KPIs + gráfica financiera + status panorama + live ops
+import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
-  PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Area, AreaChart,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ResponsiveContainer,
+  PieChart, Pie, Cell,
 } from "recharts";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  TrendingUp, Package,
-  ShoppingCart, Truck, DollarSign, BarChart3, RefreshCw, AlertTriangle,
-} from "lucide-react";
+  faMoneyBillWave, faChartLine, faBoxes, faPercent,
+  faCircleCheck, faTruck, faTriangleExclamation,
+  faRotateLeft, faBan, faWarehouse,
+  faArrowTrendUp, faArrowTrendDown, faMinus,
+  faArrowRight, faRotate,
+} from "@fortawesome/free-solid-svg-icons";
 import { dropiService } from "./dropi.service";
-import type { DropisStatsDto } from "@/contracts/api.types";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import type { DropisStatsDto, OrdenActivaItem } from "@/contracts/api.types";
+import { DateRangePicker } from "./components/DateRangePicker";
+import type { DateRange } from "./components/DateRangePicker";
+import { StatusBadge } from "@/components/data-table/DataTable";
 import { cn } from "@/lib/utils";
 
-// ── Paleta de colores para gráficas ──────────────────────────────────────────
-const ESTATUS_COLORS: Record<string, string> = {
-  ENTREGADO:  "#22c55e",
-  DEVOLUCION: "#f97316",
-  CANCELADO:  "#ef4444",
-  PENDING:    "#eab308",
-  NOVEDAD:    "#a855f7",
-};
-const CHART_COLORS = ["#6366f1", "#22c55e", "#f97316", "#06b6d4", "#a855f7",
-                       "#eab308", "#ef4444", "#14b8a6", "#f43f5e", "#84cc16"];
+// ── Formatters ────────────────────────────────────────────────────────────────
 const COP = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
 const NUM = new Intl.NumberFormat("es-CO");
+const SHORT = new Intl.NumberFormat("es-CO", { notation: "compact", maximumFractionDigits: 2 });
+
+function shortCOP(n: number) {
+  if (Math.abs(n) >= 1_000_000) return `$${SHORT.format(n)}`;
+  if (Math.abs(n) >= 1_000)     return COP.format(n);
+  return COP.format(n);
+}
+
+function fmtDate(iso: string) {
+  if (!iso) return "";
+  const [, m, d] = iso.split("-");
+  return `${d}/${m}`;
+}
+
+function defaultRange(): DateRange {
+  const today = new Date();
+  const desde = new Date(today); desde.setDate(today.getDate() - 6);
+  const toIso = (d: Date) => d.toISOString().slice(0, 10);
+  return { desde: toIso(desde), hasta: toIso(today) };
+}
 
 // ── KPI Card ─────────────────────────────────────────────────────────────────
-function KpiCard({ label, value, sub, icon: Icon, accent = false }:
-  { label: string; value: string; sub?: string; icon: React.ElementType; accent?: boolean }) {
+function KpiCard({
+  label, value, sub, icon, pct, accent = false,
+}: {
+  label: string; value: string; sub?: string;
+  icon: any; pct?: number; accent?: boolean;
+}) {
+  const up   = pct != null && pct > 0;
+  const down = pct != null && pct < 0;
   return (
-    <Card className={cn(accent && "border-primary/30 bg-primary/5")}>
-      <CardContent className="flex items-start gap-4 pt-5 pb-4">
-        <div className={cn(
-          "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
-          accent ? "bg-primary/20" : "bg-muted"
-        )}>
-          <Icon className={cn("h-5 w-5", accent ? "text-primary" : "text-muted-foreground")} />
-        </div>
+    <div className={cn(
+      "rounded-xl border p-5 flex flex-col gap-3 transition-colors",
+      accent ? "border-primary/30 bg-primary/5" : "border-border bg-card"
+    )}>
+      <div className="flex items-start justify-between">
         <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className={cn("text-2xl font-bold tabular-nums mt-0.5", accent && "text-primary")}>{value}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</p>
+          <p className={cn("text-3xl font-bold tabular-nums mt-1", accent && "text-primary")}>{value}</p>
           {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
         </div>
-      </CardContent>
-    </Card>
+        <div className={cn(
+          "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+          accent ? "bg-primary/20" : "bg-muted"
+        )}>
+          <FontAwesomeIcon icon={icon} className={cn("h-4 w-4", accent ? "text-primary" : "text-muted-foreground")} />
+        </div>
+      </div>
+      {pct != null && (
+        <div className={cn(
+          "inline-flex items-center gap-1 text-xs font-medium rounded-full px-2 py-0.5 self-start",
+          up   ? "bg-green-500/15 text-green-400" :
+          down ? "bg-red-500/15   text-red-400"   :
+                 "bg-muted       text-muted-foreground"
+        )}>
+          <FontAwesomeIcon
+            icon={up ? faArrowTrendUp : down ? faArrowTrendDown : faMinus}
+            className="h-3 w-3"
+          />
+          {up ? "+" : ""}{Number(pct).toFixed(1)}%
+        </div>
+      )}
+    </div>
   );
 }
 
-// ── Tooltip personalizado ─────────────────────────────────────────────────────
-function ChartTooltip({ active, payload, label, currency = false }:
-  { active?: boolean; payload?: any[]; label?: string; currency?: boolean }) {
+// ── Status panorama tile ──────────────────────────────────────────────────────
+function StatusTile({ label, count, icon, color }: {
+  label: string; count: number; icon: any; color: string;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</p>
+        <FontAwesomeIcon icon={icon} className={cn("h-3.5 w-3.5", color)} />
+      </div>
+      <p className={cn("text-3xl font-bold tabular-nums", color)}>{NUM.format(count)}</p>
+    </div>
+  );
+}
+
+// ── Tooltip para la gráfica ───────────────────────────────────────────────────
+function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs shadow-xl">
-      {label && <p className="font-medium mb-1">{label}</p>}
-      {payload.map((p: any, i: number) => (
-        <p key={i} style={{ color: p.color }} className="tabular-nums">
-          {p.name}: {currency ? COP.format(p.value) : NUM.format(p.value)}
+    <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs shadow-xl space-y-1">
+      <p className="font-medium text-muted-foreground">{label}</p>
+      {payload.map((p: any) => (
+        <p key={p.name} style={{ color: p.color }} className="tabular-nums">
+          {p.name}: {shortCOP(p.value)}
         </p>
       ))}
     </div>
   );
 }
 
-// ── Nombre del mes ────────────────────────────────────────────────────────────
-const MESES = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun",
-               "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-
 // ── Componente principal ──────────────────────────────────────────────────────
 export function DashboardPage() {
-  const [stats, setStats]       = useState<DropisStatsDto | null>(null);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState<string | null>(null);
+  const navigate = useNavigate();
+  const [range, setRange]   = useState<DateRange>(defaultRange());
+  const [stats, setStats]   = useState<DropisStatsDto | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]   = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      setStats(await dropiService.getStats());
+      setStats(await dropiService.getStats(range.desde, range.hasta));
       setError(null);
     } catch (e: any) {
       setError(e.response?.data?.message ?? "No se pudo cargar el resumen.");
     } finally { setLoading(false); }
-  };
+  }, [range]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
-  if (loading && !stats) return (
-    <div className="flex items-center justify-center h-64 gap-3 text-muted-foreground">
-      <RefreshCw className="h-5 w-5 animate-spin" />
-      Cargando resumen…
-    </div>
-  );
+  // Construir mapa de conteo por estatus para el panorama
+  const estatusMap = new Map(stats?.porEstatus.map(e => [e.estatus?.toUpperCase(), e.count]) ?? []);
+  const getCount = (...keys: string[]) => keys.reduce((s, k) => s + (estatusMap.get(k) ?? 0), 0);
 
-  if (error) return (
-    <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-red-400 flex gap-2 items-center">
-      <AlertTriangle className="h-4 w-4 shrink-0" />{error}
-    </div>
-  );
+  // Datos para la gráfica (muestra hasta 60 puntos, sino agrupa)
+  const chartData = stats?.evolucionDiaria.map(d => ({
+    fecha: fmtDate(d.fecha),
+    Venta: d.ventaTotal,
+    Ganancia: d.gananciaTotal,
+    Costo: d.ventaTotal - d.gananciaTotal,
+  })) ?? [];
 
-  if (!stats) return null;
-
-  const hasItems    = stats.ordenesConItems > 0;
-  const tasa        = Number(stats.tasaEntrega).toFixed(1);
-
-  // Datos para la evolución: unir mes-año en una etiqueta
-  const evolucionData = stats.evolucion.map(m => ({
-    mes:      `${MESES[m.mes]} ${String(m.anio).slice(2)}`,
-    ordenes:  m.count,
-    ganancia: m.gananciaTotal,
-  }));
-
-  // Datos para estatus donut
-  const estatusData = stats.porEstatus.map(e => ({
-    name:  e.estatus,
-    value: e.count,
-    monto: e.montoTotal,
-  }));
-
-  // Top ciudades (horizontal bar)
-  const ciudadesData = [...stats.topCiudades]
-    .slice(0, 10)
-    .map(c => ({ ciudad: c.ciudad || "Sin ciudad", ordenes: c.count, monto: c.montoTotal }));
-
-  // Top productos
-  const productosData = stats.topProductos.slice(0, 8).map(p => ({
-    nombre: p.nombre ? (p.nombre.length > 22 ? p.nombre.slice(0, 22) + "…" : p.nombre) : p.sku || "–",
-    qty: p.qtyTotal,
-    ordenes: p.ordenesCount,
-  }));
+  const hasItems = (stats?.ordenesConItems ?? 0) > 0;
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Header */}
+    <div className="space-y-5 animate-fade-in">
+
+      {/* ── Header con DateRangePicker ─────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Resumen</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {NUM.format(stats.totalOrdenes)} órdenes registradas
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {NUM.format(stats?.totalOrdenes ?? 0)} órdenes en el período
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={load} disabled={loading} className="h-8">
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-          Actualizar
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <DateRangePicker value={range} onChange={r => { setRange(r); }} />
+          <button
+            onClick={load} disabled={loading}
+            className="flex items-center justify-center h-9 w-9 rounded-lg border border-border bg-card hover:border-primary/50 transition-colors"
+            title="Actualizar"
+          >
+            <FontAwesomeIcon icon={faRotate} className={cn("h-3.5 w-3.5 text-muted-foreground", loading && "animate-spin")} />
+          </button>
+        </div>
       </div>
 
-      {/* ── Sección TIENDA ────────────────────────────────────────────────── */}
-      <section className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-violet-400">
-          Vista Tienda — precios de venta
-        </p>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <KpiCard label="Total órdenes"    value={NUM.format(stats.totalOrdenes)}     icon={ShoppingCart} />
-          <KpiCard label="Venta total"      value={COP.format(stats.ventaTotal)}       icon={DollarSign} />
-          <KpiCard label="Ganancia total"   value={COP.format(stats.gananciaTotal)}    icon={TrendingUp} accent />
-          <KpiCard label="Tasa de entrega"  value={`${tasa}%`}
-                   sub={`${NUM.format(stats.ordenesEntregadas)} entregadas`}           icon={Truck} />
+      {error && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-red-400 flex gap-2">
+          <FontAwesomeIcon icon={faTriangleExclamation} className="h-4 w-4 shrink-0 mt-0.5" />
+          {error}
         </div>
-      </section>
-
-      {/* ── Sección BODEGA ────────────────────────────────────────────────── */}
-      {hasItems && (
-        <section className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-widest text-emerald-400">
-            Vista Bodega / Proveedor — precio de costo
-          </p>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-            <KpiCard label="Unidades despachadas" value={NUM.format(stats.unidadesTotal)}       icon={Package} />
-            <KpiCard label="Costo proveedor"      value={COP.format(stats.costoProveedorTotal)} icon={DollarSign} />
-            <KpiCard label="Órdenes con items"    value={NUM.format(stats.ordenesConItems)}     icon={BarChart3} />
-          </div>
-        </section>
       )}
 
-      {/* ── Gráficas fila 1: Estatus + Ciudades ─────────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-
-        {/* Donut — por estatus */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Órdenes por estado</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {estatusData.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-8">Sin datos</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie data={estatusData} cx="50%" cy="50%" innerRadius={55} outerRadius={85}
-                    dataKey="value" nameKey="name" paddingAngle={2}>
-                    {estatusData.map((e, i) => (
-                      <Cell key={e.name} fill={ESTATUS_COLORS[e.name] ?? CHART_COLORS[i % CHART_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<ChartTooltip />} />
-                  <Legend iconSize={10} iconType="circle"
-                    formatter={(v) => <span className="text-xs text-muted-foreground">{v}</span>} />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Bar horizontal — top ciudades */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Top 10 ciudades</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {ciudadesData.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-8">Sin datos</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={ciudadesData} layout="vertical" margin={{ left: 8, right: 16 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                  <YAxis type="category" dataKey="ciudad" width={80}
-                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Bar dataKey="ordenes" name="Órdenes" fill="#6366f1" radius={[0, 3, 3, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
+      {/* ── KPI Cards ────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <KpiCard
+          label="Total Ventas"
+          value={shortCOP(stats?.ventaTotal ?? 0)}
+          icon={faMoneyBillWave}
+          pct={stats?.pctVenta}
+        />
+        <KpiCard
+          label="Ganancia Total"
+          value={shortCOP(stats?.gananciaTotal ?? 0)}
+          icon={faChartLine}
+          pct={stats?.pctGanancia}
+          accent
+        />
+        <KpiCard
+          label="Costo Proveedores"
+          value={shortCOP(stats?.costoProveedorTotal ?? 0)}
+          sub={hasItems ? `${NUM.format(stats?.unidadesTotal ?? 0)} unidades` : undefined}
+          icon={faBoxes}
+          pct={stats?.pctCostoProveedor}
+        />
+        <KpiCard
+          label="Margen Neto"
+          value={`${Number(stats?.margenNeto ?? 0).toFixed(2)}%`}
+          sub={`Tasa entrega: ${Number(stats?.tasaEntrega ?? 0).toFixed(1)}%`}
+          icon={faPercent}
+          pct={stats?.pctOrdenes}
+        />
       </div>
 
-      {/* ── Gráfica fila 2: Evolución mensual ───────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Evolución mensual — órdenes y ganancia</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {evolucionData.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-8">Sin datos de evolución</p>
+      {/* ── Gráfica financiera + Status panorama ─────────────────────────── */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+
+        {/* Gráfica — ocupa 2/3 */}
+        <div className="lg:col-span-2 rounded-xl border border-border bg-card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-semibold">Rendimiento Financiero</p>
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-violet-400 rounded" />Venta</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-emerald-400 rounded" />Ganancia</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-slate-400 rounded" />COGS</span>
+            </div>
+          </div>
+          {chartData.length === 0 ? (
+            <div className="flex items-center justify-center h-52 text-muted-foreground text-sm">Sin datos en el período</div>
           ) : (
-            <ResponsiveContainer width="100%" height={240}>
-              <AreaChart data={evolucionData} margin={{ top: 4, right: 16, bottom: 0, left: 8 }}>
+            <ResponsiveContainer width="100%" height={220}>
+              <AreaChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
                 <defs>
-                  <linearGradient id="gradOrdenes" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#6366f1" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                  <linearGradient id="gVenta"    x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor="#7c3aed" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
                   </linearGradient>
-                  <linearGradient id="gradGanancia" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#22c55e" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                  <linearGradient id="gGanancia" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor="#10b981" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gCosto"    x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor="#94a3b8" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#94a3b8" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                <YAxis yAxisId="left"  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                  tickFormatter={(v) => `$${(v / 1_000_000).toFixed(1)}M`} />
+                <XAxis dataKey="fecha" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  interval={Math.max(0, Math.floor(chartData.length / 8) - 1)} />
+                <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  tickFormatter={v => `$${SHORT.format(v)}`} width={55} />
                 <Tooltip content={<ChartTooltip />} />
-                <Legend iconSize={10} iconType="circle"
-                  formatter={(v) => <span className="text-xs text-muted-foreground">{v}</span>} />
-                <Area yAxisId="left"  type="monotone" dataKey="ordenes"  name="Órdenes"
-                  stroke="#6366f1" fill="url(#gradOrdenes)"  strokeWidth={2} dot={{ r: 3 }} />
-                <Area yAxisId="right" type="monotone" dataKey="ganancia" name="Ganancia"
-                  stroke="#22c55e" fill="url(#gradGanancia)" strokeWidth={2} dot={{ r: 3 }} />
+                <Area type="monotone" dataKey="Venta"    stroke="#7c3aed" fill="url(#gVenta)"    strokeWidth={2} dot={false} />
+                <Area type="monotone" dataKey="Ganancia" stroke="#10b981" fill="url(#gGanancia)" strokeWidth={2} dot={false} />
+                <Area type="monotone" dataKey="Costo"    stroke="#94a3b8" fill="url(#gCosto)"    strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
               </AreaChart>
             </ResponsiveContainer>
           )}
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* ── Gráfica fila 3: Top productos (solo si hay items) ───────────── */}
-      {hasItems && productosData.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Top productos por unidades vendidas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={productosData} margin={{ top: 4, right: 16, bottom: 40, left: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis dataKey="nombre" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
-                  angle={-30} textAnchor="end" interval={0} />
-                <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                <Tooltip content={<ChartTooltip />} />
-                <Bar dataKey="qty" name="Unidades" fill="#06b6d4" radius={[3, 3, 0, 0]}>
-                  {productosData.map((_, i) => (
-                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+        {/* Status Panorama — 1/3 */}
+        <div className="rounded-xl border border-border bg-card p-5 space-y-3">
+          <p className="text-sm font-semibold">Panorama de Estados</p>
+          <div className="grid grid-cols-2 gap-2">
+            <StatusTile label="Entregados"  count={getCount("ENTREGADO")}
+              icon={faCircleCheck} color="text-green-400" />
+            <StatusTile label="En Reparto"  count={getCount("EN CAMINO","EN CAMINO A DESTINO","INTENTO DE ENTREGA")}
+              icon={faTruck} color="text-blue-400" />
+            <StatusTile label="Novedades"   count={getCount("NOVEDAD","CON NOVEDAD")}
+              icon={faTriangleExclamation} color="text-yellow-400" />
+            <StatusTile label="Devoluciones" count={getCount("DEVOLUCION","DEVOLUCIÓN","EN DEVOLUCION")}
+              icon={faRotateLeft} color="text-red-400" />
+            <StatusTile label="Cancelados"  count={getCount("CANCELADO","CANCELADO CLIENTE")}
+              icon={faBan} color="text-red-400" />
+            <StatusTile label="En Bodega"   count={getCount("RECLAME EN OFICINA","EN BODEGA")}
+              icon={faWarehouse} color="text-slate-400" />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Live Operations ───────────────────────────────────────────────── */}
+      {(stats?.ordenesActivas?.length ?? 0) > 0 && (
+        <div className="rounded-xl border border-border bg-card">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+            <p className="text-sm font-semibold">Operaciones Activas</p>
+            <button
+              onClick={() => navigate("/dropi/ordenes")}
+              className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+            >
+              Ver todas
+              <FontAwesomeIcon icon={faArrowRight} className="h-3 w-3" />
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-muted/50 border-b border-border">
+                <tr>
+                  {["ID ORDEN","ESTADO","TRANSPORTADORA","DÍAS ACTIVA","CIUDAD","VALOR"].map(h => (
+                    <th key={h} className="px-4 py-2.5 text-left font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">
+                      {h}
+                    </th>
                   ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {stats!.ordenesActivas.map((o: OrdenActivaItem) => (
+                  <tr
+                    key={o.id}
+                    onClick={() => navigate(`/dropi/ordenes/${o.id}`)}
+                    className="hover:bg-muted/20 cursor-pointer transition-colors"
+                  >
+                    <td className="px-4 py-3 font-mono text-primary">#{o.dropiId}</td>
+                    <td className="px-4 py-3"><StatusBadge value={o.estatus} /></td>
+                    <td className="px-4 py-3 text-muted-foreground">{o.transportadora ?? "—"}</td>
+                    <td className="px-4 py-3">
+                      {o.diasActiva != null ? (
+                        <span className={cn(
+                          "font-medium tabular-nums",
+                          o.diasActiva >= 7 ? "text-red-400" :
+                          o.diasActiva >= 3 ? "text-yellow-400" : "text-foreground"
+                        )}>
+                          {o.diasActiva === 0 ? "Hoy" : `${o.diasActiva} día${o.diasActiva !== 1 ? "s" : ""}`}
+                        </span>
+                      ) : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{o.ciudadDestino ?? "—"}</td>
+                    <td className="px-4 py-3 tabular-nums text-right font-medium">
+                      {o.totalOrden != null ? COP.format(o.totalOrden) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Top ciudades + Top productos (si hay) ────────────────────────── */}
+      {stats && (stats.topCiudades.length > 0 || stats.topProductos.length > 0) && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+
+          {/* Top ciudades — donut */}
+          {stats.topCiudades.length > 0 && (
+            <div className="rounded-xl border border-border bg-card p-5">
+              <p className="text-sm font-semibold mb-3">Top ciudades</p>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={stats.topCiudades.slice(0, 8)}
+                    cx="35%" cy="50%"
+                    innerRadius={50} outerRadius={75}
+                    dataKey="count" nameKey="ciudad" paddingAngle={2}
+                  >
+                    {stats.topCiudades.slice(0, 8).map((_, i) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v: any) => NUM.format(Number(v))} />
+                  <Legend
+                    layout="vertical" align="right" verticalAlign="middle"
+                    iconSize={8} iconType="circle"
+                    formatter={(v) => <span className="text-[11px] text-muted-foreground">{v}</span>}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Top productos */}
+          {hasItems && stats.topProductos.length > 0 && (
+            <div className="rounded-xl border border-border bg-card p-5">
+              <p className="text-sm font-semibold mb-3">Top productos</p>
+              <div className="space-y-2">
+                {stats.topProductos.slice(0, 6).map((p, i) => {
+                  const maxQty = stats.topProductos[0].qtyTotal;
+                  const pct = maxQty > 0 ? (p.qtyTotal / maxQty) * 100 : 0;
+                  return (
+                    <div key={i} className="space-y-0.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="truncate max-w-[200px] text-muted-foreground" title={p.nombre}>{p.nombre || p.sku}</span>
+                        <span className="tabular-nums font-medium ml-2">{NUM.format(p.qtyTotal)} uds</span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                        <div className="h-full rounded-full bg-violet-500/70 transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
 }
+
+const COLORS = ["#6366f1","#22c55e","#f97316","#06b6d4","#a855f7","#eab308","#ef4444","#14b8a6"];

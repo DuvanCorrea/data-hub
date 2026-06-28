@@ -139,55 +139,119 @@ public class DropisQueryService {
 
     // ── Stats ─────────────────────────────────────────────────────────────────
 
-    public DropisStatsDto getStats(Long tenantId) {
-        // KPIs tienda — la query devuelve UNA fila; acceder via .get(0)
-        List<Object[]> kpiRows = ordenRepo.kpis(tenantId);
-        Object[] kpiRow = kpiRows.isEmpty() ? new Object[]{0L, 0, 0, 0L, 0} : kpiRows.get(0);
-        long totalOrdenes     = toLong(kpiRow[0]);
-        BigDecimal ganancia   = toBD(kpiRow[1]);
-        BigDecimal venta      = toBD(kpiRow[2]);
-        long entregadas       = toLong(kpiRow[3]);
-        BigDecimal flete      = toBD(kpiRow[4]);
+    public DropisStatsDto getStats(Long tenantId, LocalDate desde, LocalDate hasta) {
+        String desdeStr = desde != null ? desde.toString() : null;
+        String hastaStr = hasta != null ? hasta.toString() : null;
+
+        // ── KPIs período actual ──────────────────────────────────────────────
+        List<Object[]> kpiRows = ordenRepo.kpis(tenantId, desdeStr, hastaStr);
+        Object[] kp = kpiRows.isEmpty() ? new Object[]{0L,0,0,0L,0,0} : kpiRows.get(0);
+        long     totalOrdenes = toLong(kp[0]);
+        BigDecimal ganancia   = toBD(kp[1]);
+        BigDecimal venta      = toBD(kp[2]);
+        long     entregadas   = toLong(kp[3]);
+        BigDecimal flete      = toBD(kp[4]);
+        BigDecimal comision   = toBD(kp[5]);
         BigDecimal tasa = totalOrdenes > 0
                 ? BigDecimal.valueOf(entregadas * 100.0 / totalOrdenes).setScale(1, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
+        BigDecimal margenNeto = venta.compareTo(BigDecimal.ZERO) > 0
+                ? ganancia.divide(venta, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
 
-        // KPIs bodega — ídem
-        List<Object[]> bodegaRows = itemRepo.kpiBodega(tenantId);
-        Object[] bodegaRow = bodegaRows.isEmpty() ? new Object[]{0, 0, 0L} : bodegaRows.get(0);
-        long unidades        = toLong(bodegaRow[0]);
-        BigDecimal costoProv = toBD(bodegaRow[1]);
-        long ordenesConItems = toLong(bodegaRow[2]);
+        // ── KPIs período previo (misma duración, desplazado) ─────────────────
+        BigDecimal pctVenta = BigDecimal.ZERO;
+        BigDecimal pctGanancia = BigDecimal.ZERO;
+        BigDecimal pctOrdenes = BigDecimal.ZERO;
+        if (desde != null && hasta != null) {
+            long days = java.time.temporal.ChronoUnit.DAYS.between(desde, hasta) + 1;
+            String prevDesde = desde.minusDays(days).toString();
+            String prevHasta = desde.minusDays(1).toString();
+            List<Object[]> prevRows = ordenRepo.kpis(tenantId, prevDesde, prevHasta);
+            if (!prevRows.isEmpty()) {
+                Object[] pk = prevRows.get(0);
+                BigDecimal prevVenta    = toBD(pk[2]);
+                BigDecimal prevGanancia = toBD(pk[1]);
+                long prevOrdenes        = toLong(pk[0]);
+                pctVenta    = pct(venta,    prevVenta);
+                pctGanancia = pct(ganancia, prevGanancia);
+                pctOrdenes  = pct(BigDecimal.valueOf(totalOrdenes), BigDecimal.valueOf(prevOrdenes));
+            }
+        }
 
-        // Distribuciones
-        List<DropisStatsDto.EstatusCount> porEstatus = ordenRepo.countByEstatus(tenantId)
+        // ── KPIs bodega ───────────────────────────────────────────────────────
+        List<Object[]> bodegaRows = itemRepo.kpiBodega(tenantId, desdeStr, hastaStr);
+        Object[] br = bodegaRows.isEmpty() ? new Object[]{0,0,0L} : bodegaRows.get(0);
+        long     unidades        = toLong(br[0]);
+        BigDecimal costoProv     = toBD(br[1]);
+        long     ordenesConItems = toLong(br[2]);
+        BigDecimal pctCostoProv  = BigDecimal.ZERO;
+        if (desde != null && hasta != null) {
+            long days = java.time.temporal.ChronoUnit.DAYS.between(desde, hasta) + 1;
+            String prevDesde = desde.minusDays(days).toString();
+            String prevHasta = desde.minusDays(1).toString();
+            List<Object[]> prevB = itemRepo.kpiBodega(tenantId, prevDesde, prevHasta);
+            if (!prevB.isEmpty()) pctCostoProv = pct(costoProv, toBD(prevB.get(0)[1]));
+        }
+
+        // ── Distribuciones ────────────────────────────────────────────────────
+        List<DropisStatsDto.EstatusCount> porEstatus = ordenRepo.countByEstatus(tenantId, desdeStr, hastaStr)
                 .stream().map(r -> DropisStatsDto.EstatusCount.builder()
                         .estatus((String) r[0]).count(toLong(r[1])).montoTotal(toBD(r[2])).build())
                 .collect(Collectors.toList());
 
-        List<DropisStatsDto.CiudadCount> topCiudades = ordenRepo.topCiudades(tenantId)
+        List<DropisStatsDto.CiudadCount> topCiudades = ordenRepo.topCiudades(tenantId, desdeStr, hastaStr)
                 .stream().map(r -> DropisStatsDto.CiudadCount.builder()
                         .ciudad((String) r[0]).count(toLong(r[1])).montoTotal(toBD(r[2])).build())
                 .collect(Collectors.toList());
 
-        List<DropisStatsDto.MesCount> evolucion = ordenRepo.evolucionMensual(tenantId)
-                .stream().map(r -> DropisStatsDto.MesCount.builder()
-                        .anio(toInt(r[0])).mes(toInt(r[1])).count(toLong(r[2])).gananciaTotal(toBD(r[3])).build())
+        // Evolución diaria (para gráfica financiera principal)
+        List<DropisStatsDto.DiaCount> evolucionDiaria = ordenRepo.evolucionDiaria(tenantId, desdeStr, hastaStr)
+                .stream().map(r -> DropisStatsDto.DiaCount.builder()
+                        .fecha(r[0] != null ? r[0].toString() : null)
+                        .count(toLong(r[1])).gananciaTotal(toBD(r[2])).ventaTotal(toBD(r[3])).build())
                 .collect(Collectors.toList());
 
-        List<DropisStatsDto.ProductoCount> topProductos = productoRepo.topProductos(tenantId)
+        List<DropisStatsDto.ProductoCount> topProductos = productoRepo.topProductos(tenantId, desdeStr, hastaStr)
                 .stream().map(r -> DropisStatsDto.ProductoCount.builder()
                         .nombre((String) r[0]).sku((String) r[1])
                         .qtyTotal(toLong(r[3])).ordenesCount(toLong(r[4])).build())
                 .collect(Collectors.toList());
 
+        // Órdenes activas para "Live Operations" (sin filtro de fecha — muestra las activas HOY)
+        List<DropisStatsDto.OrdenActivaItem> ordenesActivas = ordenRepo.ordenesActivas(tenantId)
+                .stream().map(r -> DropisStatsDto.OrdenActivaItem.builder()
+                        .id(toLong(r[0]))
+                        .dropiId((String) r[1])
+                        .estatus((String) r[2])
+                        .transportadora((String) r[3])
+                        .fecha(r[4] != null ? r[4].toString() : null)
+                        .totalOrden(toBD(r[5]))
+                        .ciudadDestino((String) r[6])
+                        .diasActiva(r[7] != null ? ((Number) r[7]).intValue() : null)
+                        .build())
+                .collect(Collectors.toList());
+
         return DropisStatsDto.builder()
                 .totalOrdenes(totalOrdenes).ventaTotal(venta).gananciaTotal(ganancia)
                 .ordenesEntregadas(entregadas).tasaEntrega(tasa).fleteTotal(flete)
+                .comisionTotal(comision).margenNeto(margenNeto)
+                .pctVenta(pctVenta).pctGanancia(pctGanancia)
+                .pctOrdenes(pctOrdenes).pctCostoProveedor(pctCostoProv)
                 .unidadesTotal(unidades).costoProveedorTotal(costoProv).ordenesConItems(ordenesConItems)
                 .porEstatus(porEstatus).topCiudades(topCiudades)
-                .evolucion(evolucion).topProductos(topProductos)
+                .evolucionDiaria(evolucionDiaria).topProductos(topProductos)
+                .ordenesActivas(ordenesActivas)
                 .build();
+    }
+
+    /** % de cambio entre valor actual y anterior */
+    private static BigDecimal pct(BigDecimal current, BigDecimal prev) {
+        if (prev == null || prev.compareTo(BigDecimal.ZERO) == 0) return BigDecimal.ZERO;
+        return current.subtract(prev)
+                .divide(prev.abs(), 4, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+                .setScale(1, RoundingMode.HALF_UP);
     }
 
     // ── Mappers privados ──────────────────────────────────────────────────────

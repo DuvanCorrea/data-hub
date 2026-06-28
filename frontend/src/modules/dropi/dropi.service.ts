@@ -19,8 +19,10 @@ export interface OrdenesParams {
 }
 
 export const dropiService = {
-  async getStats(): Promise<DropisStatsDto> {
-    const res = await http.get<ApiResponse<DropisStatsDto>>("/api/dropi/stats");
+  async getStats(fechaDesde?: string, fechaHasta?: string): Promise<DropisStatsDto> {
+    const res = await http.get<ApiResponse<DropisStatsDto>>("/api/dropi/stats", {
+      params: { fechaDesde, fechaHasta },
+    });
     return res.data.data;
   },
 

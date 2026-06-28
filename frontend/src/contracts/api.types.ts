@@ -181,8 +181,13 @@ export interface ProductoDto {
 
 export interface EstatusCount  { estatus: string; count: number; montoTotal: number; }
 export interface CiudadCount   { ciudad: string;  count: number; montoTotal: number; }
-export interface MesCount      { anio: number; mes: number; count: number; gananciaTotal: number; }
+export interface DiaCount      { fecha: string; count: number; gananciaTotal: number; ventaTotal: number; }
 export interface ProductoCount { nombre: string; sku: string; qtyTotal: number; ordenesCount: number; }
+export interface OrdenActivaItem {
+  id: number; dropiId: string; estatus: string;
+  transportadora: string | null; fecha: string | null;
+  totalOrden: number | null; ciudadDestino: string | null; diasActiva: number | null;
+}
 
 export interface ProductoVariacionDto {
   id: number;
@@ -199,13 +204,21 @@ export interface DropisStatsDto {
   ordenesEntregadas: number;
   tasaEntrega: number;
   fleteTotal: number;
+  comisionTotal: number;
+  margenNeto: number;
+  // Tendencia vs período anterior
+  pctVenta: number;
+  pctGanancia: number;
+  pctOrdenes: number;
+  pctCostoProveedor: number;
   // Perspectiva BODEGA
   unidadesTotal: number;
   costoProveedorTotal: number;
   ordenesConItems: number;
   // Distribuciones
-  porEstatus:   EstatusCount[];
-  topCiudades:  CiudadCount[];
-  evolucion:    MesCount[];
-  topProductos: ProductoCount[];
+  porEstatus:      EstatusCount[];
+  topCiudades:     CiudadCount[];
+  evolucionDiaria: DiaCount[];
+  topProductos:    ProductoCount[];
+  ordenesActivas:  OrdenActivaItem[];
 }

@@ -184,6 +184,13 @@ export interface CiudadCount   { ciudad: string;  count: number; montoTotal: num
 export interface MesCount      { anio: number; mes: number; count: number; gananciaTotal: number; }
 export interface ProductoCount { nombre: string; sku: string; qtyTotal: number; ordenesCount: number; }
 
+export interface ProductoVariacionDto {
+  id: number;
+  variacionIdDropi: string | null;
+  nombreVariacion: string | null;
+  createdAt: string;
+}
+
 export interface DropisStatsDto {
   // Perspectiva TIENDA
   totalOrdenes: number;

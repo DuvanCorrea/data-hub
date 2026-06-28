@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,7 +14,6 @@ public interface OrdenItemRepository extends JpaRepository<OrdenItemEntity, Long
 
     List<OrdenItemEntity> findByOrdenId(Long ordenId);
 
-    // Upsert check: ¿ya existe este item para esta orden?
     @Query("""
         SELECT oi FROM OrdenItemEntity oi
         WHERE oi.ordenId = :ordenId
@@ -22,13 +22,23 @@ public interface OrdenItemRepository extends JpaRepository<OrdenItemEntity, Long
         """)
     Optional<OrdenItemEntity> findExisting(Long ordenId, String productoIdDropi, String variacionIdDropi);
 
-    // Stats: total unidades y monto proveedor por tenant
+    /** KPIs bodega — devuelve UNA fila como List<Object[]> para parseo seguro */
     @Query(value = """
-        SELECT COALESCE(SUM(oi.cantidad), 0)                AS unidades_total,
+        SELECT COALESCE(SUM(oi.cantidad), 0)                    AS unidades_total,
                COALESCE(SUM(oi.precio_proveedor_x_cantidad), 0) AS costo_proveedor_total,
-               COUNT(DISTINCT oi.orden_id)                  AS ordenes_con_items
+               COUNT(DISTINCT oi.orden_id)                      AS ordenes_con_items
         FROM orden_items oi
         WHERE oi.tenant_id = :tenantId
         """, nativeQuery = true)
-    Object[] kpiBodega(Long tenantId);
+    List<Object[]> kpiBodega(Long tenantId);
+
+    /** Suma costo proveedor por orden — batch para la lista de órdenes (evita N+1) */
+    @Query(value = """
+        SELECT orden_id,
+               COALESCE(SUM(precio_proveedor_x_cantidad), 0) AS costo_total
+        FROM orden_items
+        WHERE orden_id IN :ordenIds
+        GROUP BY orden_id
+        """, nativeQuery = true)
+    List<Object[]> sumCostoByOrdenIds(Collection<Long> ordenIds);
 }

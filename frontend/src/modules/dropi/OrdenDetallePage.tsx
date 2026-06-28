@@ -6,15 +6,9 @@ import { dropiService } from "./dropi.service";
 import type { OrdenDetalleDto } from "@/contracts/api.types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { StatusBadge } from "@/components/data-table/DataTable";
 
 const COP = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
-
-const ESTATUS_STYLE: Record<string, string> = {
-  ENTREGADO:  "bg-green-500/15 text-green-400  border-green-500/30",
-  DEVOLUCION: "bg-orange-500/15 text-orange-400 border-orange-500/30",
-  CANCELADO:  "bg-red-500/15   text-red-400    border-red-500/30",
-};
 
 function Field({ label, value }: { label: string; value?: string | number | null }) {
   if (!value && value !== 0) return null;
@@ -62,10 +56,6 @@ export function OrdenDetallePage() {
 
   useEffect(() => { load(); }, [id]);
 
-  const estatusStyle = orden?.estatus
-    ? (ESTATUS_STYLE[orden.estatus.toUpperCase()] ?? "bg-muted text-muted-foreground border-border")
-    : "";
-
   return (
     <div className="space-y-4 animate-fade-in max-w-5xl">
       {/* Header */}
@@ -79,11 +69,7 @@ export function OrdenDetallePage() {
               Orden{" "}
               <span className="font-mono text-primary">#{orden?.dropiId ?? id}</span>
             </h1>
-            {orden?.estatus && (
-              <span className={cn("inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium uppercase tracking-wider", estatusStyle)}>
-                {orden.estatus}
-              </span>
-            )}
+            {orden?.estatus && <StatusBadge value={orden.estatus} />}
           </div>
           {orden && (
             <p className="text-sm text-muted-foreground mt-0.5">

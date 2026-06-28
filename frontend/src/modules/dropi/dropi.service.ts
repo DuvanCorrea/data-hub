@@ -2,7 +2,8 @@
 import { http } from "@/lib/http";
 import type {
   ApiResponse, Page,
-  OrdenListDto, OrdenDetalleDto, ClienteDto, ProductoDto, DropisStatsDto,
+  OrdenListDto, OrdenDetalleDto, ClienteDto, ProductoDto,
+  DropisStatsDto, ProductoVariacionDto,
 } from "@/contracts/api.types";
 
 export interface OrdenesParams {
@@ -44,6 +45,13 @@ export const dropiService = {
     const res = await http.get<ApiResponse<Page<ProductoDto>>>("/api/dropi/productos", {
       params: { page, size },
     });
+    return res.data.data;
+  },
+
+  async getVariaciones(productoId: number): Promise<ProductoVariacionDto[]> {
+    const res = await http.get<ApiResponse<ProductoVariacionDto[]>>(
+      `/api/dropi/productos/${productoId}/variaciones`
+    );
     return res.data.data;
   },
 };

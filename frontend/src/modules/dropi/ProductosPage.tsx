@@ -1,19 +1,40 @@
 // ─── ProductosPage (modules/dropi/ProductosPage.tsx) ─────────────────────────
 import { useEffect, useState } from "react";
-import { Tag, RefreshCw, AlertTriangle } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 import { dropiService } from "./dropi.service";
-import type { ProductoDto } from "@/contracts/api.types";
+import type { ProductoDto, ProductoVariacionDto } from "@/contracts/api.types";
+import { DataTable } from "@/components/data-table/DataTable";
+import type { ColumnDef } from "@/components/data-table/DataTable";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const NUM = new Intl.NumberFormat("es-CO");
 
+const PRODUCTO_COLS: ColumnDef<ProductoDto>[] = [
+  { key: "sku",            label: "SKU",              type: "text",   pinned: true },
+  { key: "nombre",         label: "Producto",         type: "text",   minWidth: 200 },
+  { key: "productoIdDropi",label: "ID Dropi",         type: "text",   hidden: true },
+  { key: "qtyTotal",       label: "Unidades vendidas",type: "number", sortable: true },
+  { key: "ordenesCount",   label: "Órdenes",          type: "number", sortable: true },
+];
+
+const VARIACION_COLS: ColumnDef<ProductoVariacionDto>[] = [
+  { key: "variacionIdDropi", label: "ID Variación", type: "text" },
+  { key: "nombreVariacion",  label: "Nombre",       type: "text", minWidth: 200 },
+];
+
 export function ProductosPage() {
-  const [rows, setRows]       = useState<ProductoDto[]>([]);
-  const [total, setTotal]     = useState(0);
+  const [rows, setRows]           = useState<ProductoDto[]>([]);
+  const [total, setTotal]         = useState(0);
   const [totalPages, setTotalPages] = useState(0);
-  const [page, setPage]       = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
+  const [page, setPage]           = useState(0);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState<string | null>(null);
+
+  // Modal de variaciones
+  const [selectedProducto, setSelectedProducto] = useState<ProductoDto | null>(null);
+  const [variaciones, setVariaciones]           = useState<ProductoVariacionDto[]>([]);
+  const [loadingVar, setLoadingVar]             = useState(false);
 
   const load = async (pg = page) => {
     setLoading(true);
@@ -30,8 +51,13 @@ export function ProductosPage() {
 
   useEffect(() => { load(page); }, [page]);
 
-  const start = page * 50 + 1;
-  const end   = Math.min((page + 1) * 50, total);
+  const openVariaciones = async (producto: ProductoDto) => {
+    setSelectedProducto(producto);
+    setLoadingVar(true);
+    try {
+      setVariaciones(await dropiService.getVariaciones(producto.id));
+    } finally { setLoadingVar(false); }
+  };
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -40,7 +66,7 @@ export function ProductosPage() {
           <h1 className="text-xl font-semibold tracking-tight">Productos</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {NUM.format(total)} productos en catálogo
-            {total === 0 && " — requiere subir archivos de tipo Órdenes por Producto"}
+            {total === 0 && " — sube un archivo de tipo Órdenes por Producto"}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => load()} disabled={loading} className="h-8">
@@ -49,55 +75,58 @@ export function ProductosPage() {
       </div>
 
       {error && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-red-400 flex gap-2 items-center">
-          <AlertTriangle className="h-4 w-4 shrink-0" />{error}
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-red-400">
+          {error}
         </div>
       )}
 
-      <div className="relative rounded-lg border border-border overflow-hidden">
-        {loading && (
-          <div className="absolute inset-0 bg-background/70 z-10 flex items-center justify-center">
-            <div className="h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-          </div>
-        )}
-        {!loading && rows.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <Tag className="h-8 w-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">Sin productos. Sube un archivo de Órdenes por Producto.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-muted/80 border-b border-border">
-                <tr>
-                  {["SKU","Nombre del producto","ID Dropi","Unidades vendidas","Órdenes"].map(h => (
-                    <th key={h} className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap border-r border-border last:border-r-0">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                {rows.map(p => (
-                  <tr key={p.id} className="hover:bg-muted/20 transition-colors">
-                    <td className="px-3 py-2 font-mono text-muted-foreground">{p.sku ?? "—"}</td>
-                    <td className="px-3 py-2 font-medium max-w-[280px] truncate" title={p.nombre ?? ""}>{p.nombre ?? "—"}</td>
-                    <td className="px-3 py-2 font-mono text-muted-foreground">{p.productoIdDropi ?? "—"}</td>
-                    <td className="px-3 py-2 tabular-nums text-center font-medium text-emerald-400">{NUM.format(p.qtyTotal)}</td>
-                    <td className="px-3 py-2 tabular-nums text-center">{NUM.format(p.ordenesCount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <DataTable<ProductoDto>
+        columns={PRODUCTO_COLS}
+        rows={rows}
+        totalElements={total}
+        totalPages={totalPages}
+        page={page}
+        size={50}
+        isLoading={loading}
+        emptyMessage="Sin productos. Sube un archivo de Órdenes por Producto."
+        onPageChange={setPage}
+        onSizeChange={() => {}}
+        onRowClick={openVariaciones}
+      />
 
-      {total > 50 && (
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{NUM.format(start)}–{NUM.format(end)} de {NUM.format(total)}</span>
-          <div className="flex gap-1">
-            <Button variant="outline" size="sm" className="h-7 px-2" disabled={page === 0 || loading} onClick={() => setPage(p => p - 1)}>Anterior</Button>
-            <Button variant="outline" size="sm" className="h-7 px-2" disabled={page >= totalPages - 1 || loading} onClick={() => setPage(p => p + 1)}>Siguiente</Button>
-          </div>
+      {/* Modal variaciones */}
+      {selectedProducto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setSelectedProducto(null)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <Card className="relative z-10 w-full max-w-xl max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <CardHeader className="pb-3 flex-row items-start justify-between gap-4">
+              <div>
+                <CardTitle className="text-base">{selectedProducto.nombre ?? selectedProducto.sku}</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">SKU: {selectedProducto.sku} · ID Dropi: {selectedProducto.productoIdDropi}</p>
+              </div>
+              <button onClick={() => setSelectedProducto(null)} className="text-muted-foreground hover:text-foreground shrink-0 mt-0.5">
+                <X className="h-4 w-4" />
+              </button>
+            </CardHeader>
+            <CardContent className="overflow-y-auto flex-1 pb-4">
+              {loadingVar ? (
+                <div className="flex justify-center py-8"><div className="h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin" /></div>
+              ) : variaciones.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Sin variaciones registradas.</p>
+              ) : (
+                <DataTable<ProductoVariacionDto>
+                  columns={VARIACION_COLS}
+                  rows={variaciones}
+                  totalElements={variaciones.length}
+                  totalPages={1}
+                  page={0}
+                  size={variaciones.length}
+                  onPageChange={() => {}}
+                  onSizeChange={() => {}}
+                />
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

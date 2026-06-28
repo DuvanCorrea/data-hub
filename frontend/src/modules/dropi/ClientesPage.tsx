@@ -1,21 +1,33 @@
 // ─── ClientesPage (modules/dropi/ClientesPage.tsx) ───────────────────────────
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Search, X, Users, RefreshCw, AlertTriangle } from "lucide-react";
+import { RefreshCw, Search, X } from "lucide-react";
 import { dropiService } from "./dropi.service";
 import type { ClienteDto } from "@/contracts/api.types";
+import { DataTable } from "@/components/data-table/DataTable";
+import type { ColumnDef } from "@/components/data-table/DataTable";
 import { Button } from "@/components/ui/button";
 
 const NUM = new Intl.NumberFormat("es-CO");
 
+const CLIENTE_COLS: ColumnDef<ClienteDto>[] = [
+  { key: "nombre",            label: "Nombre",        type: "text",   pinned: true, minWidth: 150 },
+  { key: "telefono",          label: "Teléfono",      type: "text" },
+  { key: "email",             label: "Email",         type: "text" },
+  { key: "tipoIdentificacion",label: "Tipo ID",       type: "text",   hidden: true },
+  { key: "nroIdentificacion", label: "Nro. ID",       type: "text",   hidden: true },
+  { key: "createdAt",         label: "Registrado",    type: "datetime", sortable: false,
+    render: (v) => v ? <span className="text-muted-foreground tabular-nums">{String(v).slice(0, 10)}</span> : null },
+];
+
 export function ClientesPage() {
-  const [q, setQ]             = useState("");
-  const [page, setPage]       = useState(0);
-  const [rows, setRows]       = useState<ClienteDto[]>([]);
-  const [total, setTotal]     = useState(0);
+  const [q, setQ]               = useState("");
+  const [page, setPage]         = useState(0);
+  const [rows, setRows]         = useState<ClienteDto[]>([]);
+  const [total, setTotal]       = useState(0);
   const [totalPages, setTotalPages] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
-  const debounce              = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState<string | null>(null);
+  const debounce                = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async (search: string, pg: number) => {
     setLoading(true);
@@ -30,16 +42,13 @@ export function ClientesPage() {
     } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(q, page); }, [page]);  // página cambia → recarga inmediata
+  useEffect(() => { load(q, page); }, [page]);
 
   const handleSearch = (val: string) => {
     setQ(val);
     if (debounce.current) clearTimeout(debounce.current);
     debounce.current = setTimeout(() => { setPage(0); load(val, 0); }, 350);
   };
-
-  const start = page * 50 + 1;
-  const end   = Math.min((page + 1) * 50, total);
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -53,7 +62,7 @@ export function ClientesPage() {
         </Button>
       </div>
 
-      {/* Búsqueda */}
+      {/* Búsqueda server-side */}
       <div className="relative max-w-sm">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
         <input value={q} onChange={e => handleSearch(e.target.value)}
@@ -64,60 +73,21 @@ export function ClientesPage() {
       </div>
 
       {error && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-red-400 flex gap-2 items-center">
-          <AlertTriangle className="h-4 w-4 shrink-0" />{error}
-        </div>
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-red-400">{error}</div>
       )}
 
-      {/* Tabla */}
-      <div className="relative rounded-lg border border-border overflow-hidden">
-        {loading && (
-          <div className="absolute inset-0 bg-background/70 z-10 flex items-center justify-center">
-            <div className="h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-          </div>
-        )}
-        {!loading && rows.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <Users className="h-8 w-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">No se encontraron clientes.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-muted/80 border-b border-border">
-                <tr>
-                  {["Nombre","Teléfono","Email","Tipo ID","Nro. ID","Registrado"].map(h => (
-                    <th key={h} className="px-3 py-2.5 text-left font-medium text-muted-foreground whitespace-nowrap border-r border-border last:border-r-0">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                {rows.map(c => (
-                  <tr key={c.id} className="hover:bg-muted/20 transition-colors">
-                    <td className="px-3 py-2 font-medium">{c.nombre ?? "—"}</td>
-                    <td className="px-3 py-2 font-mono">{c.telefono ?? "—"}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{c.email ?? "—"}</td>
-                    <td className="px-3 py-2">{c.tipoIdentificacion ?? "—"}</td>
-                    <td className="px-3 py-2 font-mono">{c.nroIdentificacion ?? "—"}</td>
-                    <td className="px-3 py-2 text-muted-foreground tabular-nums">{c.createdAt ? c.createdAt.slice(0, 10) : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Paginación simple */}
-      {total > 50 && (
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{NUM.format(start)}–{NUM.format(end)} de {NUM.format(total)}</span>
-          <div className="flex gap-1">
-            <Button variant="outline" size="sm" className="h-7 px-2" disabled={page === 0 || loading} onClick={() => setPage(p => p - 1)}>Anterior</Button>
-            <Button variant="outline" size="sm" className="h-7 px-2" disabled={page >= totalPages - 1 || loading} onClick={() => setPage(p => p + 1)}>Siguiente</Button>
-          </div>
-        </div>
-      )}
+      <DataTable<ClienteDto>
+        columns={CLIENTE_COLS}
+        rows={rows}
+        totalElements={total}
+        totalPages={totalPages}
+        page={page}
+        size={50}
+        isLoading={loading}
+        emptyMessage="No se encontraron clientes."
+        onPageChange={setPage}
+        onSizeChange={() => {}}
+      />
     </div>
   );
 }

@@ -20,9 +20,10 @@ public class OrdenListDto {
     private String      transportadora;
     private String      numeroGuia;
     private BigDecimal  totalOrden;
-    private BigDecimal  ganancia;
-    private BigDecimal  precioFlete;
-    private String      tienda;
+  private BigDecimal  ganancia;
+  private BigDecimal  precioFlete;
+  private BigDecimal  costoProveedorTotal;  // SUM(precio_proveedor_x_cantidad) de items
+  private String      tienda;
     private String      vendedor;
     private Boolean     tieneItems;
     private OffsetDateTime createdAt;

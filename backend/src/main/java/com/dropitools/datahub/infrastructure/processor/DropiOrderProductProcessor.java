@@ -41,6 +41,7 @@ public class DropiOrderProductProcessor implements ImportProcessor {
     private final DropisNormalizationService        normService;
     private final ProductoRepository                productoRepo;
     private final OrdenItemRepository               itemRepo;
+    private final ProductoVariacionRepository       variacionRepo;
 
     @Override
     public boolean supports(String template) { return TEMPLATE.equalsIgnoreCase(template); }
@@ -151,6 +152,10 @@ public class DropiOrderProductProcessor implements ImportProcessor {
         // 6: upsert item (skip si no hay producto_id_dropi)
         if (stg.getProductoId() != null && !stg.getProductoId().isBlank()) {
             upsertItem(orden.getId(), tenantId, productoId, stg);
+            // 7: upsert variación (si hay dato de variación)
+            if (productoId != null && (stg.getVariacionId() != null || stg.getVariacion() != null)) {
+                upsertVariacion(tenantId, productoId, stg.getVariacionId(), stg.getVariacion());
+            }
         }
     }
 
@@ -196,6 +201,22 @@ public class DropiOrderProductProcessor implements ImportProcessor {
         item.setPrecioProveedorXCantidad(parseMoney(stg.getPrecioProveedorXCantidad()));
         item.setPorcentajeComisionPlataforma(parseMoney(stg.getPorcentajeComisionPlataforma()));
         itemRepo.save(item);
+    }
+
+    private void upsertVariacion(Long tenantId, Long productoId,
+                                  String variacionIdDropi, String nombreVariacion) {
+        if ((variacionIdDropi == null || variacionIdDropi.isBlank())
+                && (nombreVariacion == null || nombreVariacion.isBlank())) return;
+
+        variacionRepo.findExisting(tenantId, productoId, variacionIdDropi, nombreVariacion)
+                .orElseGet(() -> {
+                    ProductoVariacionEntity v = new ProductoVariacionEntity();
+                    v.setTenantId(tenantId);
+                    v.setProductoId(productoId);
+                    v.setVariacionIdDropi(variacionIdDropi);
+                    v.setNombreVariacion(nombreVariacion);
+                    return variacionRepo.save(v);
+                });
     }
 
     private BigDecimal parseMoney(String raw) { return DropisNormalizationService.parseMoney(raw); }

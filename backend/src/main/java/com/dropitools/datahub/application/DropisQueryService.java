@@ -44,20 +44,28 @@ public class DropisQueryService {
                 blankToNull(estatus), blankToNull(ciudad), tiendaId,
                 fechaDesde, fechaHasta, pageable);
 
-        // Batch-fetch clientes y tiendas para evitar N+1
+        // Batch-fetch clientes, tiendas y costo proveedor para evitar N+1
         Set<Long> clienteIds = ordenes.stream()
                 .filter(o -> o.getClienteId() != null).map(OrdenEntity::getClienteId)
                 .collect(Collectors.toSet());
         Set<Long> tiendaIds = ordenes.stream()
                 .filter(o -> o.getTiendaId() != null).map(OrdenEntity::getTiendaId)
                 .collect(Collectors.toSet());
+        Set<Long> ordenIds = ordenes.stream().map(OrdenEntity::getId).collect(Collectors.toSet());
 
         Map<Long, ClienteEntity> clientes = clienteRepo.findAllById(clienteIds).stream()
                 .collect(Collectors.toMap(ClienteEntity::getId, Function.identity()));
         Map<Long, TiendaEntity>  tiendas  = tiendaRepo.findAllById(tiendaIds).stream()
                 .collect(Collectors.toMap(TiendaEntity::getId, Function.identity()));
 
-        return ordenes.map(o -> toListDto(o, clientes, tiendas));
+        // Costo proveedor total por orden (una query batch)
+        Map<Long, java.math.BigDecimal> costoMap = itemRepo.sumCostoByOrdenIds(ordenIds)
+                .stream().collect(Collectors.toMap(
+                        r -> toLong(r[0]),
+                        r -> toBD(r[1])
+                ));
+
+        return ordenes.map(o -> toListDto(o, clientes, tiendas, costoMap));
     }
 
     public OrdenDetalleDto getDetalle(Long tenantId, Long ordenId) {
@@ -132,8 +140,9 @@ public class DropisQueryService {
     // ── Stats ─────────────────────────────────────────────────────────────────
 
     public DropisStatsDto getStats(Long tenantId) {
-        // KPIs tienda
-        Object[] kpiRow = ordenRepo.kpis(tenantId);
+        // KPIs tienda — la query devuelve UNA fila; acceder via .get(0)
+        List<Object[]> kpiRows = ordenRepo.kpis(tenantId);
+        Object[] kpiRow = kpiRows.isEmpty() ? new Object[]{0L, 0, 0, 0L, 0} : kpiRows.get(0);
         long totalOrdenes     = toLong(kpiRow[0]);
         BigDecimal ganancia   = toBD(kpiRow[1]);
         BigDecimal venta      = toBD(kpiRow[2]);
@@ -143,11 +152,12 @@ public class DropisQueryService {
                 ? BigDecimal.valueOf(entregadas * 100.0 / totalOrdenes).setScale(1, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
 
-        // KPIs bodega
-        Object[] kpiBodega    = itemRepo.kpiBodega(tenantId);
-        long unidades         = toLong(kpiBodega[0]);
-        BigDecimal costoProv  = toBD(kpiBodega[1]);
-        long ordenesConItems  = toLong(kpiBodega[2]);
+        // KPIs bodega — ídem
+        List<Object[]> bodegaRows = itemRepo.kpiBodega(tenantId);
+        Object[] bodegaRow = bodegaRows.isEmpty() ? new Object[]{0, 0, 0L} : bodegaRows.get(0);
+        long unidades        = toLong(bodegaRow[0]);
+        BigDecimal costoProv = toBD(bodegaRow[1]);
+        long ordenesConItems = toLong(bodegaRow[2]);
 
         // Distribuciones
         List<DropisStatsDto.EstatusCount> porEstatus = ordenRepo.countByEstatus(tenantId)
@@ -184,7 +194,8 @@ public class DropisQueryService {
 
     private OrdenListDto toListDto(OrdenEntity o,
                                     Map<Long, ClienteEntity> clientes,
-                                    Map<Long, TiendaEntity>  tiendas) {
+                                    Map<Long, TiendaEntity>  tiendas,
+                                    Map<Long, java.math.BigDecimal> costoMap) {
         ClienteEntity c = o.getClienteId() != null ? clientes.get(o.getClienteId()) : null;
         TiendaEntity  t = o.getTiendaId()   != null ? tiendas.get(o.getTiendaId())   : null;
         return OrdenListDto.builder()
@@ -196,6 +207,7 @@ public class DropisQueryService {
                 .transportadora(o.getTransportadora()).numeroGuia(o.getNumeroGuia())
                 .totalOrden(o.getTotalOrden()).ganancia(o.getGanancia()).precioFlete(o.getPrecioFlete())
                 .tienda(t != null ? t.getNombre() : null)
+                .costoProveedorTotal(costoMap.getOrDefault(o.getId(), java.math.BigDecimal.ZERO))
                 .tieneItems(o.getTieneItems()).createdAt(o.getCreatedAt()).build();
     }
 

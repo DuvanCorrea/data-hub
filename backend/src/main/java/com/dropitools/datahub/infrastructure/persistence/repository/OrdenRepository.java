@@ -80,5 +80,5 @@ public interface OrdenRepository extends JpaRepository<OrdenEntity, Long> {
         FROM ordenes
         WHERE tenant_id = :tenantId
         """, nativeQuery = true)
-    Object[] kpis(Long tenantId);
+    List<Object[]> kpis(Long tenantId);
 }

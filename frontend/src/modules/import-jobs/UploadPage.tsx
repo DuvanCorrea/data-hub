@@ -17,6 +17,7 @@ export function UploadPage() {
   const [state, setState] = useState<UploadState>("idle");
   const [jobId, setJobId] = useState<number | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [template, setTemplate] = useState("DROPI_ORDER");
 
   const handleFile = (f: File) => {
     if (!f.name.match(/\.(xlsx|xls)$/i)) {
@@ -38,7 +39,7 @@ export function UploadPage() {
     if (!file) return;
     setState("uploading");
     try {
-      const result = await importJobsService.uploadFile(file);
+      const result = await importJobsService.uploadFile(file, template);
       setJobId(result.jobId);
       setState("success");
     } catch (err: any) {
@@ -95,6 +96,19 @@ export function UploadPage() {
             <CardDescription>Formatos aceptados: .xlsx, .xls</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Template selector */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Plataforma / Tipo de archivo</label>
+              <select
+                value={template}
+                onChange={(e) => setTemplate(e.target.value)}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+              >
+                <option value="DROPI_ORDER">Dropi - Órdenes</option>
+                {/* Future platforms can be added here */}
+              </select>
+            </div>
+
             {/* Drop zone */}
             <div
               onClick={() => inputRef.current?.click()}

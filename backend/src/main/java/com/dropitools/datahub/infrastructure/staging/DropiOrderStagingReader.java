@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Implementación de StagingTableReader para el template DROPI_ORDER.
@@ -27,49 +28,49 @@ public class DropiOrderStagingReader implements StagingTableReader {
     private final StgDropiOrderRepository repo;
 
     private static final List<StagingColumnDef> COLUMNS = List.of(
-            new StagingColumnDef("id",                         "ID",                       "number"),
-            new StagingColumnDef("rowNumber",                  "Fila",                     "number"),
-            new StagingColumnDef("processingStatus",           "Estado staging",           "status"),
-            new StagingColumnDef("idDropi",                    "ID Dropi",                 "text"),
-            new StagingColumnDef("ordenDeDropshipper",         "Orden dropshipper",        "text"),
-            new StagingColumnDef("fechaDeReporte",             "Fecha reporte",            "text"),
-            new StagingColumnDef("fecha",                      "Fecha",                    "text"),
-            new StagingColumnDef("hora",                       "Hora",                     "text"),
-            new StagingColumnDef("nombreCliente",              "Cliente",                  "text"),
-            new StagingColumnDef("telefono",                   "Teléfono",                 "text"),
-            new StagingColumnDef("email",                      "Email",                    "text"),
-            new StagingColumnDef("estatus",                    "Estatus",                  "text"),
-            new StagingColumnDef("tipoDeEnvio",                "Tipo envío",               "text"),
-            new StagingColumnDef("departamentoDestino",        "Departamento",             "text"),
-            new StagingColumnDef("ciudadDestino",              "Ciudad",                   "text"),
-            new StagingColumnDef("direccion",                  "Dirección",                "text"),
-            new StagingColumnDef("numeroGuia",                 "Guía",                     "text"),
-            new StagingColumnDef("transportadora",             "Transportadora",           "text"),
-            new StagingColumnDef("numeroDeFactura",            "Factura",                  "text"),
-            new StagingColumnDef("valorFacturado",             "Valor facturado",          "number"),
-            new StagingColumnDef("totalDeLaOrden",             "Total orden",              "number"),
-            new StagingColumnDef("ganancia",                   "Ganancia",                 "number"),
-            new StagingColumnDef("precioFlete",                "Precio flete",             "number"),
-            new StagingColumnDef("costoDevolucionFlete",       "Costo dev. flete",         "number"),
-            new StagingColumnDef("comision",                   "Comisión",                 "number"),
-            new StagingColumnDef("novedad",                    "Novedad",                  "text"),
-            new StagingColumnDef("fueSolucionadaLaNovedad",    "¿Novedad solucionada?",    "text"),
-            new StagingColumnDef("fechaDeNovedad",             "Fecha novedad",            "text"),
-            new StagingColumnDef("solucion",                   "Solución",                 "text"),
-            new StagingColumnDef("ultimoMovimiento",           "Último movimiento",        "text"),
-            new StagingColumnDef("conceptoUltimoMovimiento",   "Concepto últ. mov.",       "text"),
-            new StagingColumnDef("ubicacionDeUltimoMovimiento","Ubicación últ. mov.",      "text"),
-            new StagingColumnDef("vendedor",                   "Vendedor",                 "text"),
-            new StagingColumnDef("tipoDeTienda",               "Tipo tienda",              "text"),
-            new StagingColumnDef("tienda",                     "Tienda",                   "text"),
-            new StagingColumnDef("errorDetail",                "Detalle error",            "text"),
-            new StagingColumnDef("createdAt",                  "Creado",                   "datetime")
+            new StagingColumnDef("id",                          "ID",                       "number"),
+            new StagingColumnDef("importJobId",                 "Job ID",                   "number"),
+            new StagingColumnDef("rowNumber",                   "Fila",                     "number"),
+            new StagingColumnDef("processingStatus",            "Estado staging",           "status"),
+            new StagingColumnDef("idDropi",                     "ID Dropi",                 "text"),
+            new StagingColumnDef("ordenDeDropshipper",          "Orden dropshipper",        "text"),
+            new StagingColumnDef("fechaDeReporte",              "Fecha reporte",            "text"),
+            new StagingColumnDef("fecha",                       "Fecha",                    "text"),
+            new StagingColumnDef("hora",                        "Hora",                     "text"),
+            new StagingColumnDef("nombreCliente",               "Cliente",                  "text"),
+            new StagingColumnDef("telefono",                    "Teléfono",                 "text"),
+            new StagingColumnDef("email",                       "Email",                    "text"),
+            new StagingColumnDef("estatus",                     "Estatus",                  "text"),
+            new StagingColumnDef("tipoDeEnvio",                 "Tipo envío",               "text"),
+            new StagingColumnDef("departamentoDestino",         "Departamento",             "text"),
+            new StagingColumnDef("ciudadDestino",               "Ciudad",                   "text"),
+            new StagingColumnDef("direccion",                   "Dirección",                "text"),
+            new StagingColumnDef("numeroGuia",                  "Guía",                     "text"),
+            new StagingColumnDef("transportadora",              "Transportadora",           "text"),
+            new StagingColumnDef("numeroDeFactura",             "Factura",                  "text"),
+            new StagingColumnDef("valorFacturado",              "Valor facturado",          "number"),
+            new StagingColumnDef("totalDeLaOrden",              "Total orden",              "number"),
+            new StagingColumnDef("ganancia",                    "Ganancia",                 "number"),
+            new StagingColumnDef("precioFlete",                 "Precio flete",             "number"),
+            new StagingColumnDef("costoDevolucionFlete",        "Costo dev. flete",         "number"),
+            new StagingColumnDef("comision",                    "Comisión",                 "number"),
+            new StagingColumnDef("novedad",                     "Novedad",                  "text"),
+            new StagingColumnDef("fueSolucionadaLaNovedad",     "¿Novedad solucionada?",    "text"),
+            new StagingColumnDef("fechaDeNovedad",              "Fecha novedad",            "text"),
+            new StagingColumnDef("solucion",                    "Solución",                 "text"),
+            new StagingColumnDef("ultimoMovimiento",            "Último movimiento",        "text"),
+            new StagingColumnDef("conceptoUltimoMovimiento",    "Concepto últ. mov.",       "text"),
+            new StagingColumnDef("ubicacionDeUltimoMovimiento", "Ubicación últ. mov.",      "text"),
+            new StagingColumnDef("vendedor",                    "Vendedor",                 "text"),
+            new StagingColumnDef("tipoDeTienda",                "Tipo tienda",              "text"),
+            new StagingColumnDef("tienda",                      "Tienda",                   "text"),
+            new StagingColumnDef("errorDetail",                 "Detalle error",            "text"),
+            new StagingColumnDef("createdAt",                   "Creado",                   "datetime")
     );
 
-    // Columnas que el front permite usar para el sort
-    private static final java.util.Set<String> SORTABLE = java.util.Set.of(
-            "id", "rowNumber", "processingStatus", "idDropi", "fechaDeReporte",
-            "estatus", "nombreCliente", "createdAt"
+    private static final Set<String> SORTABLE = Set.of(
+            "id", "importJobId", "rowNumber", "processingStatus", "idDropi",
+            "fechaDeReporte", "estatus", "nombreCliente", "createdAt"
     );
 
     @Override
@@ -86,18 +87,30 @@ public class DropiOrderStagingReader implements StagingTableReader {
     public Page<Map<String, Object>> getRows(Long tenantId, Long jobId,
                                               int page, int size,
                                               String sortBy, String sortDir) {
-        // Sanitizar sortBy para evitar inyección de campo
+        PageRequest pageable = buildPageable(page, size, sortBy, sortDir);
+        return repo.findByTenantIdAndImportJobId(tenantId, jobId, pageable).map(this::toMap);
+    }
+
+    @Override
+    public Page<Map<String, Object>> getAllRows(Long tenantId,
+                                                int page, int size,
+                                                String sortBy, String sortDir) {
+        PageRequest pageable = buildPageable(page, size, sortBy, sortDir);
+        return repo.findByTenantId(tenantId, pageable).map(this::toMap);
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private PageRequest buildPageable(int page, int size, String sortBy, String sortDir) {
         String safeSortBy = SORTABLE.contains(sortBy) ? sortBy : "id";
         Sort.Direction dir = "desc".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
-        PageRequest pageable = PageRequest.of(page, size, Sort.by(dir, safeSortBy));
-
-        Page<StgDropiOrderEntity> entityPage = repo.findByTenantIdAndImportJobId(tenantId, jobId, pageable);
-        return entityPage.map(this::toMap);
+        return PageRequest.of(page, size, Sort.by(dir, safeSortBy));
     }
 
     private Map<String, Object> toMap(StgDropiOrderEntity e) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id",                          e.getId());
+        m.put("importJobId",                 e.getImportJobId());
         m.put("rowNumber",                   e.getRowNumber());
         m.put("processingStatus",            e.getProcessingStatus());
         m.put("idDropi",                     e.getIdDropi());

@@ -15,6 +15,7 @@ export function StagingViewerPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const jobId = Number(searchParams.get("jobId") ?? "0");
+  const template = searchParams.get("template");
 
   // ── Estado de paginación y ordenamiento ──────────────────────────────────
   const [page,    setPage]    = useState(0);
@@ -28,10 +29,12 @@ export function StagingViewerPage() {
   const [error,      setError]      = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!jobId) { setError("jobId inválido."); setIsLoading(false); return; }
+    if (!jobId && !template) { setError("jobId o template inválido."); setIsLoading(false); return; }
     setIsLoading(true);
     try {
-      const result = await stagingService.getPage({ jobId, page, size, sortBy, sortDir });
+      const result = jobId 
+        ? await stagingService.getPage({ jobId, page, size, sortBy, sortDir })
+        : await stagingService.getAllPage({ template: template!, page, size, sortBy, sortDir });
       setData(result);
       setError(null);
     } catch (err: any) {
@@ -39,7 +42,7 @@ export function StagingViewerPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [jobId, page, size, sortBy, sortDir]);
+  }, [jobId, template, page, size, sortBy, sortDir]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -55,15 +58,15 @@ export function StagingViewerPage() {
     setPage(0);
   };
 
-  // ── Sin jobId ─────────────────────────────────────────────────────────────
-  if (!jobId) {
+  // ── Sin jobId ni template ──────────────────────────────────────────────────
+  if (!jobId && !template) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
         <AlertTriangle className="h-8 w-8 text-yellow-400" />
         <div>
-          <p className="font-medium">Falta el parámetro jobId</p>
+          <p className="font-medium">Falta parámetro de búsqueda</p>
           <p className="text-sm text-muted-foreground mt-1">
-            Accede a esta vista desde la lista de jobs haciendo clic en "Ver datos".
+            Se requiere jobId o template para visualizar los datos.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => navigate("/import-jobs")}>
@@ -85,7 +88,7 @@ export function StagingViewerPage() {
             <div className="flex items-center gap-2">
               <TableIcon className="h-4 w-4 text-primary" />
               <h1 className="text-xl font-semibold tracking-tight">
-                Datos de staging — Job #{jobId}
+                {jobId ? `Datos de staging — Job #${jobId}` : `Datos de staging — ${template}`}
               </h1>
             </div>
             {data && (

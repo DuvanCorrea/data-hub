@@ -25,9 +25,12 @@ public interface StgDropiOrderRepository extends JpaRepository<StgDropiOrderEnti
     @Query("DELETE FROM StgDropiOrderEntity s WHERE s.importJobId = :jobId")
     void deleteByImportJobId(Long jobId);
 
-    /** Página de filas de staging de un job (para el visor CRUD) */
+    /** Página de filas de staging de un job (para el visor CRUD por job) */
     Page<StgDropiOrderEntity> findByTenantIdAndImportJobId(
             Long tenantId, Long importJobId, Pageable pageable);
+
+    /** Página de TODAS las filas del tenant (vista global) */
+    Page<StgDropiOrderEntity> findByTenantId(Long tenantId, Pageable pageable);
 
     /** Cuenta total de filas de un job por tenant */
     long countByTenantIdAndImportJobId(Long tenantId, Long importJobId);

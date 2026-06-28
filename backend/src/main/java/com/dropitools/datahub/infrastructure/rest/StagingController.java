@@ -10,11 +10,10 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * GET /api/staging/{jobId}
- *   ?page=0&size=20&sortBy=id&sortDir=asc
+ * Endpoints de staging:
  *
- * Devuelve la vista de la tabla de staging correspondiente al job,
- * con columnas y filas definidas dinámicamente según el template.
+ *   GET /api/staging/{jobId}          → registros de un job específico
+ *   GET /api/staging?template=X       → TODOS los registros del tenant para ese template
  */
 @RestController
 @RequestMapping("/api/staging")
@@ -23,21 +22,33 @@ public class StagingController {
 
     private final StagingService stagingService;
 
+    /** Vista filtrada por job */
     @GetMapping("/{jobId}")
-    public ResponseEntity<ApiResponse<StagingPageResponse>> getStaging(
+    public ResponseEntity<ApiResponse<StagingPageResponse>> getByJob(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long jobId,
-            @RequestParam(defaultValue = "0")  int    page,
-            @RequestParam(defaultValue = "50") int    size,
-            @RequestParam(defaultValue = "id") String sortBy,
-            @RequestParam(defaultValue = "asc") String sortDir) {
-
-        // Clamp size para evitar peticiones gigantes
-        int safeSize = Math.min(size, 200);
+            @RequestParam(defaultValue = "0")    int    page,
+            @RequestParam(defaultValue = "50")   int    size,
+            @RequestParam(defaultValue = "id")   String sortBy,
+            @RequestParam(defaultValue = "asc")  String sortDir) {
 
         StagingPageResponse result = stagingService.getPage(
-                principal.getTenantId(), jobId, page, safeSize, sortBy, sortDir);
+                principal.getTenantId(), jobId, page, Math.min(size, 200), sortBy, sortDir);
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
 
+    /** Vista global (sin filtro de job) — requiere ?template=DROPI_ORDER */
+    @GetMapping
+    public ResponseEntity<ApiResponse<StagingPageResponse>> getAll(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam(defaultValue = "DROPI_ORDER") String template,
+            @RequestParam(defaultValue = "0")           int    page,
+            @RequestParam(defaultValue = "50")          int    size,
+            @RequestParam(defaultValue = "id")          String sortBy,
+            @RequestParam(defaultValue = "desc")        String sortDir) {
+
+        StagingPageResponse result = stagingService.getAllPage(
+                principal.getTenantId(), template, page, Math.min(size, 200), sortBy, sortDir);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 }

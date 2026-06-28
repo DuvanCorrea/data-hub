@@ -12,9 +12,10 @@ export interface ListJobsParams {
 }
 
 export const importJobsService = {
-  async uploadFile(file: File): Promise<FileUploadResponse> {
+  async uploadFile(file: File, template: string = "DROPI_ORDER"): Promise<FileUploadResponse> {
     const form = new FormData();
     form.append("file", file);
+    form.append("template", template);
     const res = await http.post<ApiResponse<FileUploadResponse>>("/api/files/upload", form, {
       headers: { "Content-Type": "multipart/form-data" },
     });

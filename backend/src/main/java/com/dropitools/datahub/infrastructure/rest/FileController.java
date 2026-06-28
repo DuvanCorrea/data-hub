@@ -25,9 +25,10 @@ public class FileController {
     @PostMapping("/upload")
     public ResponseEntity<ApiResponse<FileUploadResponse>> upload(
             @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "template", defaultValue = "DROPI_ORDER") String template,
             @AuthenticationPrincipal UserPrincipal principal) {
         try {
-            ImportJobEntity job = fileImportService.upload(file, principal.getTenantId(), principal.getId());
+            ImportJobEntity job = fileImportService.upload(file, template, principal.getTenantId(), principal.getId());
             return ResponseEntity.status(HttpStatus.CREATED)
                     .body(ApiResponse.created(new FileUploadResponse(job.getId(), job.getFileId()), "Archivo recibido, procesando."));
         } catch (Exception e) {

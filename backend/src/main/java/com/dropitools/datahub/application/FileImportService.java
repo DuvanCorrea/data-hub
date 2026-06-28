@@ -36,7 +36,7 @@ public class FileImportService {
     private String storagePath;
 
     @Transactional
-    public ImportJobEntity upload(MultipartFile file, Long tenantId, Long userId) throws IOException {
+    public ImportJobEntity upload(MultipartFile file, String template, Long tenantId, Long userId) throws IOException {
         // 1. Validar extensión
         String originalName = file.getOriginalFilename();
         if (originalName == null ||
@@ -76,7 +76,7 @@ public class FileImportService {
         ImportJobEntity job = new ImportJobEntity();
         job.setTenantId(tenantId);
         job.setFileId(fileEntity.getId());
-        job.setTemplate("DROPI_ORDER");
+        job.setTemplate(template != null && !template.trim().isEmpty() ? template : "DROPI_ORDER");
         job.setStatus("PENDING");
         job = jobRepository.save(job);
 

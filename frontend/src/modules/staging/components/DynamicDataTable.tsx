@@ -1,10 +1,19 @@
 // ─── DynamicDataTable (modules/staging/components/DynamicDataTable.tsx) ──────
-// Tabla completamente dinámica: columnas y filas vienen del backend.
-// Soporta: ordenamiento por columna, paginación, filtro global,
-//          resaltado de celdas por tipo (status, number, datetime).
+// Tabla completamente dinámica usando TanStack Table v8.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useMemo } from "react";
+import {
+  useReactTable,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getFacetedRowModel,
+  getFacetedUniqueValues,
+  ColumnDef,
+  flexRender,
+  ColumnFiltersState,
+  VisibilityState,
+} from "@tanstack/react-table";
 import {
   ChevronUp,
   ChevronDown,
@@ -22,18 +31,6 @@ import { Button } from "@/components/ui/button";
 
 // ── Sub-componentes ───────────────────────────────────────────────────────────
 
-interface SortState {
-  key: string;
-  dir: "asc" | "desc";
-}
-
-function SortIcon({ col, sort }: { col: string; sort: SortState | null }) {
-  if (!sort || sort.key !== col) return <ChevronsUpDown className="h-3 w-3 opacity-40" />;
-  return sort.dir === "asc"
-    ? <ChevronUp className="h-3 w-3 text-primary" />
-    : <ChevronDown className="h-3 w-3 text-primary" />;
-}
-
 function StatusBadge({ value }: { value: string | null }) {
   if (!value) return <span className="text-muted-foreground">—</span>;
   const map: Record<string, string> = {
@@ -50,7 +47,7 @@ function StatusBadge({ value }: { value: string | null }) {
   );
 }
 
-function CellValue({ value, type }: { value: string | number | null; type: StagingColumnDef["type"] }) {
+function CellValue({ value, type }: { value: any; type: StagingColumnDef["type"] }) {
   if (value === null || value === undefined || value === "") {
     return <span className="text-muted-foreground/50">—</span>;
   }
@@ -72,10 +69,7 @@ function CellValue({ value, type }: { value: string | number | null; type: Stagi
   }
   const str = String(value);
   return (
-    <span
-      className="block truncate max-w-[200px]"
-      title={str}
-    >
+    <span className="block truncate max-w-[200px]" title={str}>
       {str}
     </span>
   );
@@ -99,75 +93,81 @@ interface DynamicDataTableProps {
 }
 
 const PAGE_SIZES = [20, 50, 100, 200];
-
-// ── Columnas fijadas al inicio (siempre visibles) ────────────────────────────
 const PINNED_COLS = ["id", "rowNumber", "processingStatus"];
 
 // ── Componente principal ──────────────────────────────────────────────────────
 
 export function DynamicDataTable({
-  columns,
+  columns: apiColumns,
   rows,
   totalElements,
   totalPages,
-  page,
-  size,
-  sortBy,
-  sortDir,
+  page: serverPage,
+  size: serverSize,
+  sortBy: serverSortBy,
+  sortDir: serverSortDir,
   isLoading,
   onPageChange,
   onSizeChange,
   onSortChange,
 }: DynamicDataTableProps) {
+  
   const [globalFilter, setGlobalFilter] = useState("");
-  const [visibleCols, setVisibleCols] = useState<Set<string>>(
-    () => new Set(columns.map((c) => c.key))
-  );
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
 
-  // Filtro local (sobre las filas de la página actual)
-  const filteredRows = useMemo(() => {
-    if (!globalFilter.trim()) return rows;
-    const q = globalFilter.toLowerCase();
-    return rows.filter((row) =>
-      columns.some((col) => {
-        const v = row[col.key];
-        return v !== null && String(v).toLowerCase().includes(q);
-      })
-    );
-  }, [rows, columns, globalFilter]);
+  // Construir columnas de TanStack Table
+  const tableColumns = useMemo<ColumnDef<StagingRow>[]>(() => {
+    return apiColumns.map((col) => ({
+      id: col.key,
+      accessorKey: col.key,
+      header: col.label,
+      cell: (info) => <CellValue value={info.getValue()} type={col.type} />,
+      enableSorting: PINNED_COLS.includes(col.key) || col.type === "text", // Ejemplo de habilitar sort
+      enableHiding: !PINNED_COLS.includes(col.key), // Las pinned no se pueden ocultar
+    }));
+  }, [apiColumns]);
 
-  const visibleColumns = columns.filter((c) => visibleCols.has(c.key));
+  const table = useReactTable({
+    data: rows,
+    columns: tableColumns,
+    state: {
+      globalFilter,
+      columnFilters,
+      columnVisibility,
+    },
+    onGlobalFilterChange: setGlobalFilter,
+    onColumnFiltersChange: setColumnFilters,
+    onColumnVisibilityChange: setColumnVisibility,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getFacetedRowModel: getFacetedRowModel(),
+    getFacetedUniqueValues: getFacetedUniqueValues(),
+    // Sorting se delega al servidor (manual)
+    manualSorting: true,
+    manualPagination: true,
+  });
 
-  const handleHeaderClick = (col: StagingColumnDef) => {
-    if (col.type === "text" && !PINNED_COLS.includes(col.key)) return; // solo columns "sortables"
-    const newDir = sortBy === col.key && sortDir === "asc" ? "desc" : "asc";
-    onSortChange(col.key, newDir);
+  const handleHeaderSort = (column: any) => {
+    if (!column.getCanSort()) return;
+    const newDir = serverSortBy === column.id && serverSortDir === "asc" ? "desc" : "asc";
+    onSortChange(column.id, newDir);
   };
 
-  const toggleCol = (key: string) => {
-    if (PINNED_COLS.includes(key)) return; // pinned → no se pueden ocultar
-    setVisibleCols((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
-  const startRow = page * size + 1;
-  const endRow   = Math.min((page + 1) * size, totalElements);
+  const startRow = serverPage * serverSize + 1;
+  const endRow   = Math.min((serverPage + 1) * serverSize, totalElements);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 animate-fade-in">
       {/* ── Toolbar ────────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* Filtro global */}
+        {/* Filtro global local */}
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
           <input
-            value={globalFilter}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            placeholder="Filtrar en esta página…"
+            value={globalFilter ?? ""}
+            onChange={(e) => setGlobalFilter(String(e.target.value))}
+            placeholder="Buscar en esta página..."
             className="w-full rounded-md border border-border bg-muted/30 pl-8 pr-8 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
           />
           {globalFilter && (
@@ -180,14 +180,16 @@ export function DynamicDataTable({
           )}
         </div>
 
-        {/* Selector de columnas */}
-        <ColVisibilityMenu columns={columns} visible={visibleCols} onToggle={toggleCol} />
+        {/* Visibilidad de columnas */}
+        <div className="relative">
+          <ColVisibilityMenu table={table} apiColumns={apiColumns} />
+        </div>
 
-        {/* Selector tamaño de página */}
+        {/* Selector de tamaño */}
         <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-          <span>Filas:</span>
+          <span>Filas por pág:</span>
           <select
-            value={size}
+            value={serverSize}
             onChange={(e) => onSizeChange(Number(e.target.value))}
             className="rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
           >
@@ -207,62 +209,90 @@ export function DynamicDataTable({
         )}
         <div className="overflow-x-auto thin-scroll">
           <table className="w-full text-xs">
-            <thead className="sticky top-0 z-[5]">
-              <tr className="border-b border-border bg-muted/60 backdrop-blur">
-                {visibleColumns.map((col) => (
-                  <th
-                    key={col.key}
-                    onClick={() => handleHeaderClick(col)}
-                    className={cn(
-                      "whitespace-nowrap px-3 py-2.5 text-left font-medium text-muted-foreground select-none",
-                      "border-r border-border last:border-r-0",
-                      col.type === "number" && "text-right",
-                      (PINNED_COLS.includes(col.key) || col.type !== "text") &&
-                        "cursor-pointer hover:text-foreground hover:bg-muted/80 transition-colors"
-                    )}
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      {col.label}
-                      {(PINNED_COLS.includes(col.key) || col.type !== "text") && (
-                        <SortIcon col={col.key} sort={sortBy ? { key: sortBy, dir: sortDir } : null} />
-                      )}
-                    </span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/60">
-              {filteredRows.length === 0 && (
-                <tr>
-                  <td colSpan={visibleColumns.length} className="px-4 py-10 text-center text-muted-foreground">
-                    {globalFilter ? "Sin resultados para el filtro aplicado." : "Sin filas de datos."}
-                  </td>
-                </tr>
-              )}
-              {filteredRows.map((row, ri) => (
-                <tr
-                  key={ri}
-                  className="hover:bg-muted/20 transition-colors group"
-                >
-                  {visibleColumns.map((col) => (
-                    <td
-                      key={col.key}
-                      className={cn(
-                        "px-3 py-1.5 border-r border-border/40 last:border-r-0",
-                        col.type === "number" && "text-right"
-                      )}
-                    >
-                      <CellValue value={row[col.key] ?? null} type={col.type} />
-                    </td>
-                  ))}
+            <thead className="sticky top-0 z-[5] bg-muted/60 backdrop-blur border-b border-border">
+              {table.getHeaderGroups().map((headerGroup) => (
+                <tr key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => {
+                    const isSorted = serverSortBy === header.column.id;
+                    return (
+                      <th
+                        key={header.id}
+                        className={cn(
+                          "whitespace-nowrap px-3 py-2 text-left font-medium text-muted-foreground border-r border-border last:border-r-0 align-top"
+                        )}
+                      >
+                        <div className="flex flex-col gap-1.5">
+                          {/* Title & Sort */}
+                          <div 
+                            className={cn(
+                              "flex items-center justify-between gap-2 select-none", 
+                              header.column.getCanSort() && "cursor-pointer hover:text-foreground"
+                            )}
+                            onClick={() => handleHeaderSort(header.column)}
+                          >
+                            <span>
+                              {header.isPlaceholder
+                                ? null
+                                : flexRender(
+                                    header.column.columnDef.header,
+                                    header.getContext()
+                                  )}
+                            </span>
+                            {header.column.getCanSort() && (
+                              <div className="w-3">
+                                {isSorted ? (
+                                  serverSortDir === "asc" ? <ChevronUp className="h-3 w-3 text-primary" /> : <ChevronDown className="h-3 w-3 text-primary" />
+                                ) : (
+                                  <ChevronsUpDown className="h-3 w-3 opacity-40" />
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Column Filter */}
+                          {header.column.getCanFilter() && (
+                            <FilterInput column={header.column} />
+                          )}
+                        </div>
+                      </th>
+                    );
+                  })}
                 </tr>
               ))}
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {table.getRowModel().rows.length === 0 ? (
+                <tr>
+                  <td colSpan={table.getVisibleFlatColumns().length} className="px-4 py-10 text-center text-muted-foreground">
+                    No se encontraron resultados en esta página.
+                  </td>
+                </tr>
+              ) : (
+                table.getRowModel().rows.map((row) => (
+                  <tr key={row.id} className="hover:bg-muted/20 transition-colors group">
+                    {row.getVisibleCells().map((cell) => {
+                      const isNumber = apiColumns.find((c) => c.key === cell.column.id)?.type === "number";
+                      return (
+                        <td
+                          key={cell.id}
+                          className={cn(
+                            "px-3 py-1.5 border-r border-border/40 last:border-r-0",
+                            isNumber && "text-right"
+                          )}
+                        >
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* ── Paginación ─────────────────────────────────────────────────────── */}
+      {/* ── Paginación Server-Side ─────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <p className="text-xs text-muted-foreground tabular-nums">
           {totalElements === 0
@@ -275,22 +305,21 @@ export function DynamicDataTable({
             variant="outline" size="icon"
             className="h-7 w-7"
             onClick={() => onPageChange(0)}
-            disabled={page === 0 || isLoading}
+            disabled={serverPage === 0 || isLoading}
           >
             <ChevronsLeft className="h-3.5 w-3.5" />
           </Button>
           <Button
             variant="outline" size="icon"
             className="h-7 w-7"
-            onClick={() => onPageChange(page - 1)}
-            disabled={page === 0 || isLoading}
+            onClick={() => onPageChange(serverPage - 1)}
+            disabled={serverPage === 0 || isLoading}
           >
             <ChevronLeft className="h-3.5 w-3.5" />
           </Button>
 
-          {/* Números de página */}
           <div className="flex items-center gap-0.5">
-            {getPageNumbers(page, totalPages).map((n, i) =>
+            {getPageNumbers(serverPage, totalPages).map((n, i) =>
               n === "..." ? (
                 <span key={`ellipsis-${i}`} className="px-1.5 text-xs text-muted-foreground">…</span>
               ) : (
@@ -300,7 +329,7 @@ export function DynamicDataTable({
                   disabled={isLoading}
                   className={cn(
                     "h-7 min-w-[28px] rounded-md px-2 text-xs transition-colors",
-                    n === page
+                    n === serverPage
                       ? "bg-primary text-primary-foreground font-medium"
                       : "hover:bg-muted text-muted-foreground hover:text-foreground"
                   )}
@@ -314,8 +343,8 @@ export function DynamicDataTable({
           <Button
             variant="outline" size="icon"
             className="h-7 w-7"
-            onClick={() => onPageChange(page + 1)}
-            disabled={page >= totalPages - 1 || isLoading}
+            onClick={() => onPageChange(serverPage + 1)}
+            disabled={serverPage >= totalPages - 1 || isLoading}
           >
             <ChevronRight className="h-3.5 w-3.5" />
           </Button>
@@ -323,7 +352,7 @@ export function DynamicDataTable({
             variant="outline" size="icon"
             className="h-7 w-7"
             onClick={() => onPageChange(totalPages - 1)}
-            disabled={page >= totalPages - 1 || isLoading}
+            disabled={serverPage >= totalPages - 1 || isLoading}
           >
             <ChevronsRight className="h-3.5 w-3.5" />
           </Button>
@@ -333,19 +362,45 @@ export function DynamicDataTable({
   );
 }
 
-// ── Menú de visibilidad de columnas ──────────────────────────────────────────
+// ── Column Filter Input ────────────────────────────────────────────────────────
+function FilterInput({ column }: { column: any }) {
+  const columnFilterValue = column.getFilterValue();
+  const apiType = column.columnDef.id === "processingStatus" ? "status" : "text"; // Simplificado
 
-function ColVisibilityMenu({
-  columns,
-  visible,
-  onToggle,
-}: {
-  columns: StagingColumnDef[];
-  visible: Set<string>;
-  onToggle: (key: string) => void;
-}) {
+  if (apiType === "status") {
+    // Si queremos un select para status
+    return (
+      <select
+        value={(columnFilterValue ?? "") as string}
+        onChange={e => column.setFilterValue(e.target.value)}
+        className="w-full rounded border border-border bg-background px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground"
+      >
+        <option value="">Todos</option>
+        <option value="PENDING">PENDING</option>
+        <option value="RUNNING">RUNNING</option>
+        <option value="PROCESSED">PROCESSED</option>
+        <option value="ERROR">ERROR</option>
+      </select>
+    );
+  }
+
+  return (
+    <input
+      type="text"
+      value={(columnFilterValue ?? "") as string}
+      onChange={e => column.setFilterValue(e.target.value)}
+      placeholder={`Filtrar...`}
+      className="w-full rounded border border-border bg-background px-1.5 py-0.5 text-[10px] placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 font-normal"
+    />
+  );
+}
+
+// ── Menú de visibilidad de columnas ──────────────────────────────────────────
+function ColVisibilityMenu({ table, apiColumns }: { table: any, apiColumns: StagingColumnDef[] }) {
   const [open, setOpen] = useState(false);
-  const hiddenCount = columns.filter((c) => !PINNED_COLS.includes(c.key) && !visible.has(c.key)).length;
+  const hiddenCount = table.getVisibleLeafColumns().length; // Para calcular cuántas ocultas
+  const totalCols = table.getAllLeafColumns().length;
+  const hidden = totalCols - hiddenCount;
 
   return (
     <div className="relative">
@@ -356,9 +411,9 @@ function ColVisibilityMenu({
         onClick={() => setOpen((v) => !v)}
       >
         Columnas
-        {hiddenCount > 0 && (
+        {hidden > 0 && (
           <span className="rounded-full bg-primary/20 text-primary px-1.5 py-0.5 text-[10px] font-medium">
-            -{hiddenCount}
+            -{hidden}
           </span>
         )}
       </Button>
@@ -370,12 +425,12 @@ function ColVisibilityMenu({
             <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
               Columnas visibles
             </p>
-            {columns.map((col) => {
-              const pinned = PINNED_COLS.includes(col.key);
-              const isVisible = visible.has(col.key);
+            {table.getAllLeafColumns().map((column: any) => {
+              const colDef = apiColumns.find(c => c.key === column.id);
+              const pinned = PINNED_COLS.includes(column.id);
               return (
                 <label
-                  key={col.key}
+                  key={column.id}
                   className={cn(
                     "flex items-center gap-2 rounded px-2 py-1 text-xs cursor-pointer hover:bg-muted transition-colors",
                     pinned && "opacity-50 cursor-not-allowed"
@@ -383,13 +438,13 @@ function ColVisibilityMenu({
                 >
                   <input
                     type="checkbox"
-                    checked={isVisible}
+                    checked={column.getIsVisible()}
+                    onChange={column.getToggleVisibilityHandler()}
                     disabled={pinned}
-                    onChange={() => onToggle(col.key)}
                     className="accent-primary"
                   />
-                  <span className={cn(!isVisible && "text-muted-foreground line-through")}>
-                    {col.label}
+                  <span className={cn(!column.getIsVisible() && "text-muted-foreground line-through")}>
+                    {colDef?.label ?? column.id}
                   </span>
                   {pinned && <span className="ml-auto text-[9px] text-muted-foreground">fija</span>}
                 </label>
@@ -403,7 +458,6 @@ function ColVisibilityMenu({
 }
 
 // ── Helper: genera array de números de página con elipsis ─────────────────────
-
 function getPageNumbers(current: number, total: number): (number | "...")[] {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i);
   const pages: (number | "...")[] = [];

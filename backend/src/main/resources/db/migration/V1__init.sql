@@ -188,6 +188,6 @@ INSERT INTO users (tenant_id, username, password, role)
 VALUES (
     1,
     'admin',
-    '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQyCZ9s3Tit8zI.FhkCbTYq5e',
+    '$2b$12$9JsRTmOUkTxm1zxHIvwNxOvzCz8LcCodqPnqAtAgYgIa/YAumSxJe',
     'ADMIN'
 );

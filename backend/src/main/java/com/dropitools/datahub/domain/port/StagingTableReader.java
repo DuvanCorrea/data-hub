@@ -11,27 +11,28 @@ import java.util.Map;
  * implementa este puerto para exponer su tabla de staging
  * de forma homogénea al controlador.
  *
- * Añadir una nueva integración = nueva clase que implemente esta interfaz
- * + registrarla en StagingService.
+ * Añadir una nueva integración = nueva clase que implemente esta interfaz.
  */
 public interface StagingTableReader {
 
-    /**
-     * Identificador del template que este reader maneja.
-     * Debe coincidir con ImportJobEntity.template (ej. "DROPI_ORDER").
-     */
+    /** Identificador del template (ej. "DROPI_ORDER"). */
     String getTemplate();
 
-    /**
-     * Columnas en el orden en que deben mostrarse en la tabla.
-     */
+    /** Columnas en el orden en que deben mostrarse. */
     List<StagingColumnDef> getColumns();
 
     /**
-     * Filas paginadas para el job indicado, filtradas por tenantId.
-     * Cada fila es un mapa columna → valor (puede contener nulls).
+     * Filas paginadas para un job concreto, filtradas por tenantId.
      */
     Page<Map<String, Object>> getRows(Long tenantId, Long jobId,
                                        int page, int size,
                                        String sortBy, String sortDir);
+
+    /**
+     * Filas paginadas de TODOS los jobs del tenant (vista global).
+     * Default implementado — los readers pueden sobreescribirlo.
+     */
+    Page<Map<String, Object>> getAllRows(Long tenantId,
+                                         int page, int size,
+                                         String sortBy, String sortDir);
 }

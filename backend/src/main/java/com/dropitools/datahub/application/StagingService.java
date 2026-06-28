@@ -15,10 +15,9 @@ import java.util.Map;
 
 /**
  * Servicio genérico de staging.
- * Dado un jobId resuelve qué StagingTableReader usar (por template)
- * y delega la consulta.  Para añadir un nuevo template solo se añade
- * un nuevo @Component que implemente StagingTableReader — Spring lo
- * inyecta aquí automáticamente.
+ * Dado un jobId (o template) resuelve qué StagingTableReader usar y delega la consulta.
+ * Para añadir un nuevo template solo se añade un @Component que implemente
+ * StagingTableReader — Spring lo inyecta aquí automáticamente.
  */
 @Service
 @RequiredArgsConstructor
@@ -28,6 +27,7 @@ public class StagingService {
     /** Spring inyecta TODOS los beans que implementen StagingTableReader */
     private final List<StagingTableReader> readers;
 
+    /** Vista filtrada por job específico */
     public StagingPageResponse getPage(Long tenantId, Long jobId,
                                        int page, int size,
                                        String sortBy, String sortDir) {
@@ -36,16 +36,37 @@ public class StagingService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN,
                         "Job no encontrado o no pertenece a este tenant."));
 
-        StagingTableReader reader = readers.stream()
-                .filter(r -> r.getTemplate().equalsIgnoreCase(job.getTemplate()))
-                .findFirst()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED,
-                        "No hay visor de staging para el template: " + job.getTemplate()));
-
+        StagingTableReader reader = resolveReader(job.getTemplate());
         Page<Map<String, Object>> dataPage = reader.getRows(tenantId, jobId, page, size, sortBy, sortDir);
 
+        return buildResponse(job.getTemplate(), reader, dataPage, page);
+    }
+
+    /** Vista global: todos los registros del tenant para un template dado */
+    public StagingPageResponse getAllPage(Long tenantId, String template,
+                                          int page, int size,
+                                          String sortBy, String sortDir) {
+
+        StagingTableReader reader = resolveReader(template);
+        Page<Map<String, Object>> dataPage = reader.getAllRows(tenantId, page, size, sortBy, sortDir);
+
+        return buildResponse(template, reader, dataPage, page);
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private StagingTableReader resolveReader(String template) {
+        return readers.stream()
+                .filter(r -> r.getTemplate().equalsIgnoreCase(template))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED,
+                        "No hay visor de staging para el template: " + template));
+    }
+
+    private StagingPageResponse buildResponse(String template, StagingTableReader reader,
+                                               Page<Map<String, Object>> dataPage, int page) {
         return StagingPageResponse.builder()
-                .template(job.getTemplate())
+                .template(template)
                 .columns(reader.getColumns())
                 .rows(dataPage.getContent())
                 .totalElements(dataPage.getTotalElements())

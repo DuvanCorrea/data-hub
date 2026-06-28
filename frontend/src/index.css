@@ -1,0 +1,75 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Data/analytics world: deep slate infrastructure with electric teal accent */
+    --background: 224 16% 8%;
+    --foreground: 213 20% 93%;
+
+    --card: 224 14% 11%;
+    --card-foreground: 213 20% 93%;
+
+    --muted: 224 12% 16%;
+    --muted-foreground: 213 12% 52%;
+
+    --border: 224 12% 18%;
+    --input: 224 14% 13%;
+    --ring: 174 80% 45%;
+
+    --primary: 174 80% 45%;
+    --primary-foreground: 224 16% 8%;
+
+    --secondary: 224 12% 16%;
+    --secondary-foreground: 213 20% 80%;
+
+    --accent: 174 60% 30%;
+    --accent-foreground: 174 80% 90%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+
+    --success: 142 70% 40%;
+    --success-foreground: 0 0% 98%;
+
+    --warning: 38 90% 50%;
+    --warning-foreground: 224 16% 8%;
+
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Tabular numbers for all data/metric displays */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  /* Elevation utility for layered surfaces */
+  .surface-1 { background-color: hsl(var(--card)); }
+  .surface-2 { background-color: hsl(224 13% 14%); }
+  .surface-3 { background-color: hsl(224 13% 17%); }
+
+  /* Thin scrollbar for data tables */
+  .thin-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
+  .thin-scroll::-webkit-scrollbar-track { background: transparent; }
+  .thin-scroll::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 99px; }
+  .thin-scroll::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
+}

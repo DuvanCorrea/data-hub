@@ -155,13 +155,16 @@ export function OrdenDetallePage() {
             </Section>
           )}
 
-          {/* Items de producto */}
-          {orden.tieneItems && orden.items?.length > 0 && (
+          {/* Items de producto — se muestran si hay datos, independiente de tieneItems */}
+          {(orden.items?.length ?? 0) > 0 ? (
             <Card>
               <CardHeader className="pb-3 pt-4">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <Package className="h-4 w-4 text-emerald-400" />
-                  Productos — perspectiva Bodega/Proveedor
+                  Productos pedidos
+                  <span className="ml-auto text-xs font-normal text-muted-foreground">
+                    {orden.items.length} {orden.items.length === 1 ? "producto" : "productos"}
+                  </span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="pb-4">
@@ -169,7 +172,7 @@ export function OrdenDetallePage() {
                   <table className="w-full text-xs">
                     <thead className="bg-muted/80 border-b border-border">
                       <tr>
-                        {["SKU","Producto","Variación","Cantidad","P. Proveedor","P. Prov. × Cant.","% Comisión"].map(h => (
+                        {["SKU","Producto","Variación ID","Variación","Cant.","P. Proveedor","P. Prov. × Cant.","% Comisión"].map(h => (
                           <th key={h} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -179,10 +182,11 @@ export function OrdenDetallePage() {
                         <tr key={item.id} className="hover:bg-muted/20">
                           <td className="px-3 py-2 font-mono text-muted-foreground">{item.sku ?? "—"}</td>
                           <td className="px-3 py-2 max-w-[200px] truncate" title={item.nombreProducto ?? ""}>{item.nombreProducto ?? "—"}</td>
-                          <td className="px-3 py-2">{item.nombreVariacion ?? "—"}</td>
-                          <td className="px-3 py-2 tabular-nums text-center font-medium">{item.cantidad ?? "—"}</td>
+                          <td className="px-3 py-2 font-mono text-muted-foreground text-[10px]">{item.variacionIdDropi ?? "—"}</td>
+                          <td className="px-3 py-2 font-medium">{item.nombreVariacion || "—"}</td>
+                          <td className="px-3 py-2 tabular-nums text-center font-bold text-base">{item.cantidad ?? "—"}</td>
                           <td className="px-3 py-2 tabular-nums text-right">{item.precioProveedor != null ? COP.format(item.precioProveedor) : "—"}</td>
-                          <td className="px-3 py-2 tabular-nums text-right text-emerald-400">{item.precioProveedorXCantidad != null ? COP.format(item.precioProveedorXCantidad) : "—"}</td>
+                          <td className="px-3 py-2 tabular-nums text-right text-emerald-400 font-medium">{item.precioProveedorXCantidad != null ? COP.format(item.precioProveedorXCantidad) : "—"}</td>
                           <td className="px-3 py-2 tabular-nums text-right">{item.porcentajeComisionPlataforma != null ? `${item.porcentajeComisionPlataforma}%` : "—"}</td>
                         </tr>
                       ))}
@@ -191,6 +195,14 @@ export function OrdenDetallePage() {
                 </div>
               </CardContent>
             </Card>
+          ) : (
+            // Solo mostrar aviso si la orden DEBERÍA tener items (flag tieneItems)
+            orden.tieneItems ? (
+              <div className="rounded-lg border border-border bg-muted/10 px-4 py-3 text-sm text-muted-foreground flex items-center gap-2">
+                <Package className="h-4 w-4 shrink-0" />
+                Esta orden tiene productos registrados pero no se cargaron en el detalle. Verifica la importación.
+              </div>
+            ) : null
           )}
         </>
       )}

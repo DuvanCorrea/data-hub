@@ -11,11 +11,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 const NUM = new Intl.NumberFormat("es-CO");
 
 const PRODUCTO_COLS: ColumnDef<ProductoDto>[] = [
-  { key: "sku",            label: "SKU",              type: "text",   pinned: true },
-  { key: "nombre",         label: "Producto",         type: "text",   minWidth: 200 },
-  { key: "productoIdDropi",label: "ID Dropi",         type: "text",   hidden: true },
-  { key: "qtyTotal",       label: "Unidades vendidas",type: "number", sortable: true },
-  { key: "ordenesCount",   label: "Órdenes",          type: "number", sortable: true },
+  { key: "productoIdDropi", label: "ID Dropi",          type: "text",   pinned: true, minWidth: 100 },
+  { key: "sku",             label: "SKU",               type: "text" },
+  { key: "nombre",          label: "Producto",          type: "text",   minWidth: 220 },
+  { key: "qtyTotal",        label: "Unidades vendidas", type: "number", sortable: true },
+  { key: "ordenesCount",    label: "Órdenes",           type: "number", sortable: true },
 ];
 
 const VARIACION_COLS: ColumnDef<ProductoVariacionDto>[] = [

@@ -49,7 +49,7 @@ public class AuthController {
      * tenantId se extrae del JWT via UserPrincipal — sin X-Tenant-ID.
      */
     @GetMapping("/me")
-    public ResponseEntity<ApiResponse<?>> me(@AuthenticationPrincipal UserPrincipal principal) {
+    public ResponseEntity<?> me(@AuthenticationPrincipal UserPrincipal principal) {
         return authService.getCurrentUser(principal.getTenantId(), principal.getId())
                 .map(u -> ResponseEntity.ok(ApiResponse.success(u)))
                 .orElse(ResponseEntity.status(HttpStatus.NOT_FOUND)

@@ -6,16 +6,19 @@ import { LoginPage } from "@/modules/auth/LoginPage";
 import { ImportJobsPage } from "@/modules/import-jobs/ImportJobsPage";
 import { UploadPage } from "@/modules/import-jobs/UploadPage";
 import { StagingViewerPage } from "@/modules/staging/StagingViewerPage";
+import { DashboardPage } from "@/modules/dropi/DashboardPage";
+import { OrdenesPage } from "@/modules/dropi/OrdenesPage";
+import { OrdenDetallePage } from "@/modules/dropi/OrdenDetallePage";
+import { ClientesPage } from "@/modules/dropi/ClientesPage";
+import { ProductosPage } from "@/modules/dropi/ProductosPage";
 
 export function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public */}
           <Route path="/login" element={<LoginPage />} />
 
-          {/* Protected */}
           <Route
             path="/"
             element={
@@ -24,13 +27,21 @@ export function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<Navigate to="/import-jobs" replace />} />
+            <Route index element={<Navigate to="/dropi" replace />} />
+
+            {/* General */}
             <Route path="import-jobs" element={<ImportJobsPage />} />
-            <Route path="upload" element={<UploadPage />} />
-            <Route path="staging" element={<StagingViewerPage />} />
+            <Route path="upload"      element={<UploadPage />} />
+            <Route path="staging"     element={<StagingViewerPage />} />
+
+            {/* Dropi */}
+            <Route path="dropi"                element={<DashboardPage />} />
+            <Route path="dropi/ordenes"        element={<OrdenesPage />} />
+            <Route path="dropi/ordenes/:id"    element={<OrdenDetallePage />} />
+            <Route path="dropi/clientes"       element={<ClientesPage />} />
+            <Route path="dropi/productos"      element={<ProductosPage />} />
           </Route>
 
-          {/* Catch all */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

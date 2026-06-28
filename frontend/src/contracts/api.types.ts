@@ -88,3 +88,117 @@ export interface StagingPageResponse {
   page: number;
   size: number;
 }
+
+// ─── Dropi — Órdenes normalizadas ────────────────────────────────────────────
+
+export interface OrdenListDto {
+  id: number;
+  dropiId: string;
+  fecha: string | null;
+  estatus: string | null;
+  nombreCliente: string | null;
+  telefono: string | null;
+  ciudadDestino: string | null;
+  departamentoDestino: string | null;
+  transportadora: string | null;
+  numeroGuia: string | null;
+  totalOrden: number | null;
+  ganancia: number | null;
+  precioFlete: number | null;
+  tienda: string | null;
+  vendedor: string | null;
+  tieneItems: boolean;
+  createdAt: string;
+}
+
+export interface OrdenItemDto {
+  id: number;
+  productoIdDropi: string | null;
+  sku: string | null;
+  variacionIdDropi: string | null;
+  nombreProducto: string | null;
+  nombreVariacion: string | null;
+  cantidad: number | null;
+  precioProveedor: number | null;
+  precioProveedorXCantidad: number | null;
+  porcentajeComisionPlataforma: number | null;
+  createdAt: string;
+}
+
+export interface ClienteDto {
+  id: number;
+  nombre: string | null;
+  telefono: string | null;
+  email: string | null;
+  tipoIdentificacion: string | null;
+  nroIdentificacion: string | null;
+  createdAt: string;
+}
+
+export interface OrdenDetalleDto extends OrdenListDto {
+  hora: string | null;
+  fechaReporte: string | null;
+  tipoEnvio: string | null;
+  direccion: string | null;
+  codigoPostal: string | null;
+  costoDevolucionFlete: number | null;
+  comision: number | null;
+  numeroFactura: string | null;
+  valorFacturado: number | null;
+  ordenDropshipper: string | null;
+  tipoTienda: string | null;
+  idOrdenTienda: string | null;
+  numeroPedidoTienda: string | null;
+  tags: string | null;
+  categorias: string | null;
+  fechaGuiaGenerada: string | null;
+  novedad: string | null;
+  fueSolucionadaNovedad: string | null;
+  solucion: string | null;
+  observacion: string | null;
+  ultimoMovimiento: string | null;
+  conceptoUltimoMovimiento: string | null;
+  ubicacionUltimoMovimiento: string | null;
+  fechaUltimoMovimiento: string | null;
+  contadorIndemnizaciones: string | null;
+  conceptoUltimaIndenmizacion: string | null;
+  cliente: ClienteDto | null;
+  items: OrdenItemDto[];
+  updatedAt: string;
+}
+
+export interface ProductoDto {
+  id: number;
+  productoIdDropi: string | null;
+  sku: string | null;
+  nombre: string | null;
+  qtyTotal: number;
+  ordenesCount: number;
+  createdAt: string;
+}
+
+// ─── Dropi — Stats / Dashboard ───────────────────────────────────────────────
+
+export interface EstatusCount  { estatus: string; count: number; montoTotal: number; }
+export interface CiudadCount   { ciudad: string;  count: number; montoTotal: number; }
+export interface MesCount      { anio: number; mes: number; count: number; gananciaTotal: number; }
+export interface ProductoCount { nombre: string; sku: string; qtyTotal: number; ordenesCount: number; }
+
+export interface DropisStatsDto {
+  // Perspectiva TIENDA
+  totalOrdenes: number;
+  ventaTotal: number;
+  gananciaTotal: number;
+  ordenesEntregadas: number;
+  tasaEntrega: number;
+  fleteTotal: number;
+  // Perspectiva BODEGA
+  unidadesTotal: number;
+  costoProveedorTotal: number;
+  ordenesConItems: number;
+  // Distribuciones
+  porEstatus:   EstatusCount[];
+  topCiudades:  CiudadCount[];
+  evolucion:    MesCount[];
+  topProductos: ProductoCount[];
+}

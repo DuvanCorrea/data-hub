@@ -64,3 +64,27 @@ export interface Page<T> {
   last: boolean;
   empty: boolean;
 }
+
+// ─── Staging Viewer (generic / dynamic) ──────────────────────────────────────
+
+/** Tipo de dato de la columna para renderizado inteligente */
+export type StagingColumnType = "text" | "number" | "datetime" | "status";
+
+export interface StagingColumnDef {
+  key: string;
+  label: string;
+  type: StagingColumnType;
+}
+
+/** Fila genérica — mapa clave→valor (puede ser null) */
+export type StagingRow = Record<string, string | number | null>;
+
+export interface StagingPageResponse {
+  template: string;
+  columns: StagingColumnDef[];
+  rows: StagingRow[];
+  totalElements: number;
+  totalPages: number;
+  page: number;
+  size: number;
+}

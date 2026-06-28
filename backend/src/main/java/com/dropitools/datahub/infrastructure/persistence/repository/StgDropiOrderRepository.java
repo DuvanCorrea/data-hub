@@ -1,6 +1,7 @@
 package com.dropitools.datahub.infrastructure.persistence.repository;
 
 import com.dropitools.datahub.infrastructure.persistence.entity.StgDropiOrderEntity;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -23,4 +24,11 @@ public interface StgDropiOrderRepository extends JpaRepository<StgDropiOrderEnti
     @Modifying
     @Query("DELETE FROM StgDropiOrderEntity s WHERE s.importJobId = :jobId")
     void deleteByImportJobId(Long jobId);
+
+    /** Página de filas de staging de un job (para el visor CRUD) */
+    Page<StgDropiOrderEntity> findByTenantIdAndImportJobId(
+            Long tenantId, Long importJobId, Pageable pageable);
+
+    /** Cuenta total de filas de un job por tenant */
+    long countByTenantIdAndImportJobId(Long tenantId, Long importJobId);
 }

@@ -1,11 +1,17 @@
 // ─── HTTP Client (lib/http.ts) ────────────────────────────────────────────────
 // Single Axios instance. Injects JWT from localStorage automatically.
 // Redirects to /login on 401 so every caller stays clean.
+//
+// PROXY RULE: baseURL must be "" (empty) so every /api/* request goes through
+// the Vite dev-server proxy → http://backend:8080.
+// Do NOT set VITE_API_BASE_URL or VITE_API_URL — it would bypass the proxy
+// and cause direct cross-origin requests to the backend.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import axios from "axios";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? import.meta.env.VITE_API_URL ?? "";
+// Always empty → Vite proxy handles /api/*
+const BASE_URL = "";
 
 export const http = axios.create({
   baseURL: BASE_URL,

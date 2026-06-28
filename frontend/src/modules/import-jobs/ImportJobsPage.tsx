@@ -1,6 +1,7 @@
 // ─── Import Jobs Page (modules/import-jobs/ImportJobsPage.tsx) ────────────────
 import { useEffect, useState, useCallback } from "react";
-import { RefreshCw, FileText, Loader2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { RefreshCw, FileText, Loader2, Table2 } from "lucide-react";
 import type { ImportJobDto } from "@/contracts/api.types";
 import { importJobsService } from "./import-jobs.service";
 import { JobStatusBadge } from "./components/JobStatusBadge";
@@ -100,6 +101,7 @@ export function ImportJobsPage() {
 }
 
 function JobCard({ job }: { job: ImportJobDto }) {
+  const navigate = useNavigate();
   return (
     <Card className="transition-colors hover:border-border/80">
       <CardHeader className="pb-3">
@@ -113,7 +115,20 @@ function JobCard({ job }: { job: ImportJobDto }) {
               <CardDescription className="text-xs">{job.template}</CardDescription>
             </div>
           </div>
-          <JobStatusBadge status={job.status} />
+          <div className="flex items-center gap-2">
+            {(job.status === "COMPLETED" || job.status === "ERROR") && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1.5"
+                onClick={() => navigate(`/staging?jobId=${job.id}`)}
+              >
+                <Table2 className="h-3.5 w-3.5" />
+                Ver datos
+              </Button>
+            )}
+            <JobStatusBadge status={job.status} />
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">

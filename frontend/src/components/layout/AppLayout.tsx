@@ -3,14 +3,15 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { NavLink, Outlet } from "react-router-dom";
-import { DatabaseZap, Upload, List, LogOut, User } from "lucide-react";
+import { DatabaseZap, Upload, List, LogOut, User, Table2 } from "lucide-react";
 import { useAuth } from "@/modules/auth/AuthContext";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { to: "/import-jobs", icon: List, label: "Jobs de Importación" },
-  { to: "/upload", icon: Upload, label: "Subir Archivo" },
+  { to: "/import-jobs", icon: List,   label: "Jobs de Importación" },
+  { to: "/upload",      icon: Upload, label: "Subir Archivo" },
+  { to: "/staging",     icon: Table2, label: "Ver Datos" },
 ];
 
 export function AppLayout() {

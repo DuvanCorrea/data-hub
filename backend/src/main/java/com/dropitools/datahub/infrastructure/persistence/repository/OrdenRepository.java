@@ -17,15 +17,15 @@ public interface OrdenRepository extends JpaRepository<OrdenEntity, Long> {
 
     Optional<OrdenEntity> findByTenantIdAndDropiId(Long tenantId, String dropiId);
 
-    // ── Listado con filtros opcionales ────────────────────────────────────────
+    // ── Listado con filtros opcionales (JPQL — sin cast problem) ─────────────
     @Query("""
         SELECT o FROM OrdenEntity o
         WHERE o.tenantId = :tenantId
-          AND (:estatus   IS NULL OR o.estatus         = :estatus)
-          AND (:ciudad    IS NULL OR o.ciudadDestino   = :ciudad)
-          AND (:tiendaId  IS NULL OR o.tiendaId        = :tiendaId)
-          AND (:fechaDesde IS NULL OR o.fecha          >= :fechaDesde)
-          AND (:fechaHasta IS NULL OR o.fecha          <= :fechaHasta)
+          AND (:estatus   IS NULL OR o.estatus       = :estatus)
+          AND (:ciudad    IS NULL OR o.ciudadDestino = :ciudad)
+          AND (:tiendaId  IS NULL OR o.tiendaId      = :tiendaId)
+          AND (:fechaDesde IS NULL OR o.fecha        >= :fechaDesde)
+          AND (:fechaHasta IS NULL OR o.fecha        <= :fechaHasta)
         """)
     Page<OrdenEntity> findFiltered(Long tenantId,
                                     String estatus,
@@ -35,7 +35,8 @@ public interface OrdenRepository extends JpaRepository<OrdenEntity, Long> {
                                     LocalDate fechaHasta,
                                     Pageable pageable);
 
-    // ── KPIs globales con filtro de fecha ─────────────────────────────────────
+    // ── KPIs globales ─────────────────────────────────────────────────────────
+    // CAST(x AS date) en vez de x::date para evitar conflicto con parser de params de Spring
     @Query(value = """
         SELECT COUNT(*)                                               AS total_ordenes,
                COALESCE(SUM(ganancia), 0)                            AS ganancia_total,
@@ -45,20 +46,20 @@ public interface OrdenRepository extends JpaRepository<OrdenEntity, Long> {
                COALESCE(SUM(comision), 0)                            AS comision_total
         FROM ordenes
         WHERE tenant_id = :tenantId
-          AND (:fechaDesde IS NULL OR fecha >= :fechaDesde::date)
-          AND (:fechaHasta IS NULL OR fecha <= :fechaHasta::date)
+          AND (CAST(:fechaDesde AS date) IS NULL OR fecha >= CAST(:fechaDesde AS date))
+          AND (CAST(:fechaHasta AS date) IS NULL OR fecha <= CAST(:fechaHasta AS date))
         """, nativeQuery = true)
     List<Object[]> kpis(@Param("tenantId") Long tenantId,
                         @Param("fechaDesde") String fechaDesde,
                         @Param("fechaHasta") String fechaHasta);
 
-    // ── Conteo por estatus con filtro de fecha ────────────────────────────────
+    // ── Conteo por estatus ────────────────────────────────────────────────────
     @Query(value = """
         SELECT estatus, COUNT(*), COALESCE(SUM(total_orden), 0)
         FROM ordenes
         WHERE tenant_id = :tenantId
-          AND (:fechaDesde IS NULL OR fecha >= :fechaDesde::date)
-          AND (:fechaHasta IS NULL OR fecha <= :fechaHasta::date)
+          AND (CAST(:fechaDesde AS date) IS NULL OR fecha >= CAST(:fechaDesde AS date))
+          AND (CAST(:fechaHasta AS date) IS NULL OR fecha <= CAST(:fechaHasta AS date))
         GROUP BY estatus
         ORDER BY COUNT(*) DESC
         """, nativeQuery = true)
@@ -66,14 +67,14 @@ public interface OrdenRepository extends JpaRepository<OrdenEntity, Long> {
                                    @Param("fechaDesde") String fechaDesde,
                                    @Param("fechaHasta") String fechaHasta);
 
-    // ── Top 15 ciudades con filtro de fecha ───────────────────────────────────
+    // ── Top 15 ciudades ───────────────────────────────────────────────────────
     @Query(value = """
         SELECT ciudad_destino, COUNT(*), COALESCE(SUM(total_orden), 0)
         FROM ordenes
         WHERE tenant_id = :tenantId
           AND ciudad_destino IS NOT NULL
-          AND (:fechaDesde IS NULL OR fecha >= :fechaDesde::date)
-          AND (:fechaHasta IS NULL OR fecha <= :fechaHasta::date)
+          AND (CAST(:fechaDesde AS date) IS NULL OR fecha >= CAST(:fechaDesde AS date))
+          AND (CAST(:fechaHasta AS date) IS NULL OR fecha <= CAST(:fechaHasta AS date))
         GROUP BY ciudad_destino
         ORDER BY COUNT(*) DESC
         LIMIT 15
@@ -82,17 +83,17 @@ public interface OrdenRepository extends JpaRepository<OrdenEntity, Long> {
                                 @Param("fechaDesde") String fechaDesde,
                                 @Param("fechaHasta") String fechaHasta);
 
-    // ── Evolución DIARIA (para la gráfica financiera) ────────────────────────
+    // ── Evolución DIARIA ──────────────────────────────────────────────────────
     @Query(value = """
         SELECT fecha,
-               COUNT(*)                   AS total,
-               COALESCE(SUM(ganancia), 0) AS ganancia_total,
+               COUNT(*)                      AS total,
+               COALESCE(SUM(ganancia), 0)    AS ganancia_total,
                COALESCE(SUM(total_orden), 0) AS venta_total
         FROM ordenes
         WHERE tenant_id = :tenantId
           AND fecha IS NOT NULL
-          AND (:fechaDesde IS NULL OR fecha >= :fechaDesde::date)
-          AND (:fechaHasta IS NULL OR fecha <= :fechaHasta::date)
+          AND (CAST(:fechaDesde AS date) IS NULL OR fecha >= CAST(:fechaDesde AS date))
+          AND (CAST(:fechaHasta AS date) IS NULL OR fecha <= CAST(:fechaHasta AS date))
         GROUP BY fecha
         ORDER BY fecha
         """, nativeQuery = true)
@@ -100,18 +101,18 @@ public interface OrdenRepository extends JpaRepository<OrdenEntity, Long> {
                                     @Param("fechaDesde") String fechaDesde,
                                     @Param("fechaHasta") String fechaHasta);
 
-    // ── Evolución mensual (fallback para rangos largos) ───────────────────────
+    // ── Evolución mensual (fallback) ──────────────────────────────────────────
     @Query(value = """
-        SELECT EXTRACT(YEAR FROM fecha)::int   AS anio,
-               EXTRACT(MONTH FROM fecha)::int  AS mes,
-               COUNT(*)                        AS total,
-               COALESCE(SUM(ganancia), 0)      AS ganancia_total,
-               COALESCE(SUM(total_orden), 0)   AS venta_total
+        SELECT EXTRACT(YEAR  FROM fecha)      AS anio,
+               EXTRACT(MONTH FROM fecha)      AS mes,
+               COUNT(*)                       AS total,
+               COALESCE(SUM(ganancia), 0)     AS ganancia_total,
+               COALESCE(SUM(total_orden), 0)  AS venta_total
         FROM ordenes
         WHERE tenant_id = :tenantId
           AND fecha IS NOT NULL
-          AND (:fechaDesde IS NULL OR fecha >= :fechaDesde::date)
-          AND (:fechaHasta IS NULL OR fecha <= :fechaHasta::date)
+          AND (CAST(:fechaDesde AS date) IS NULL OR fecha >= CAST(:fechaDesde AS date))
+          AND (CAST(:fechaHasta AS date) IS NULL OR fecha <= CAST(:fechaHasta AS date))
         GROUP BY 1, 2
         ORDER BY 1, 2
         """, nativeQuery = true)
@@ -119,10 +120,7 @@ public interface OrdenRepository extends JpaRepository<OrdenEntity, Long> {
                                      @Param("fechaDesde") String fechaDesde,
                                      @Param("fechaHasta") String fechaHasta);
 
-    // ── Top productos (via items join) ────────────────────────────────────────
-    // (delegado a ProductoRepository)
-
-    // ── Órdenes activas para "Live Operations" ────────────────────────────────
+    // ── Órdenes activas ("Live Operations") ──────────────────────────────────
     @Query(value = """
         SELECT o.id, o.dropi_id, o.estatus, o.transportadora,
                o.fecha, o.total_orden, o.ciudad_destino,

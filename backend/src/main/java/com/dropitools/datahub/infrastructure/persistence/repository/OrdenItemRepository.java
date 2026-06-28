@@ -31,8 +31,8 @@ public interface OrdenItemRepository extends JpaRepository<OrdenItemEntity, Long
         FROM orden_items oi
         INNER JOIN ordenes o ON o.id = oi.orden_id
         WHERE oi.tenant_id = :tenantId
-          AND (:fechaDesde IS NULL OR o.fecha >= :fechaDesde::date)
-          AND (:fechaHasta IS NULL OR o.fecha <= :fechaHasta::date)
+          AND (CAST(:fechaDesde AS date) IS NULL OR o.fecha >= CAST(:fechaDesde AS date))
+          AND (CAST(:fechaHasta AS date) IS NULL OR o.fecha <= CAST(:fechaHasta AS date))
         """, nativeQuery = true)
     List<Object[]> kpiBodega(@Param("tenantId") Long tenantId,
                               @Param("fechaDesde") String fechaDesde,

@@ -25,8 +25,8 @@ public interface ProductoRepository extends JpaRepository<ProductoEntity, Long> 
         LEFT JOIN orden_items oi ON oi.producto_id = p.id
         LEFT JOIN ordenes o ON o.id = oi.orden_id
         WHERE p.tenant_id = :tenantId
-          AND (:fechaDesde IS NULL OR o.fecha >= :fechaDesde::date)
-          AND (:fechaHasta IS NULL OR o.fecha <= :fechaHasta::date)
+          AND (CAST(:fechaDesde AS date) IS NULL OR o.fecha >= CAST(:fechaDesde AS date))
+          AND (CAST(:fechaHasta AS date) IS NULL OR o.fecha <= CAST(:fechaHasta AS date))
         GROUP BY p.id, p.nombre, p.sku, p.producto_id_dropi
         ORDER BY qty_total DESC
         LIMIT 10

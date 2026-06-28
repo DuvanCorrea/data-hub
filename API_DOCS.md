@@ -1,301 +1,224 @@
-# Data Hub - Documentación de API y Datos Importantes
+# Data Hub — Documentación de API
 
-Esta documentación resume el estado actual del backend de Data Hub, los endpoints disponibles y los detalles arquitectónicos más importantes.
+## Entorno
 
----
+| Parámetro | Valor |
+|---|---|
+| **URL Base (local)** | `http://localhost:8080` |
+| **DB Host** | `localhost:5432` |
+| **Tenant semilla** | ID `1` — "Dropi Tools" |
+| **Admin** | `admin` / `admin123` |
+| **Almacenamiento** | `/app/files/{tenantId}/` (volumen Docker `files_data`) |
 
-## 1. Datos Importantes del Entorno
-
-| Parámetro             | Valor                          |
-|-----------------------|--------------------------------|
-| **URL Base (local)**  | `http://localhost:8080`        |
-| **DB Host (local)**   | `localhost:5432`               |
-| **Tenant Semilla**    | ID `1` — "Dropi Tools"         |
-| **Usuario admin**     | `admin` / `admin123`           |
-| **Almacenamiento**    | `/app/files/{tenantId}/` (volumen Docker `files_data`) |
-
-*   **Control de Duplicados:** Se calcula SHA-256 de cada archivo al subirlo. Si el contenido es idéntico a uno ya subido, se rechaza con `409 Conflict`.
-*   **Procesamiento Asíncrono:** La subida solo guarda el archivo y encola un `ImportJob` en `PENDING`. Un scheduler en segundo plano lo procesa con `FOR UPDATE SKIP LOCKED` para concurrencia segura.
+- **Deduplicación:** SHA-256 por archivo por tenant → `409` si ya existe.
+- **Procesamiento asíncrono:** upload encola un `ImportJob PENDING`; el scheduler lo toma con `FOR UPDATE SKIP LOCKED`.
 
 ---
 
-## 2. Plantillas de Importación Soportadas
+## Autenticación — JWT Stateless
 
-El campo `template` en `POST /api/files/upload` determina qué procesador y qué tabla staging se usa. Cada plantilla es completamente independiente — añadir una nueva no requiere cambios en el módulo de upload ni en el scheduler.
+Todas las peticiones (excepto login) requieren:
+```
+Authorization: Bearer <TOKEN>
+```
 
-| `template`           | Archivo Dropi                   | Tabla Staging                  | Fase 2 (normalización)          |
-|----------------------|---------------------------------|--------------------------------|---------------------------------|
-| `DROPI_ORDER`        | Reporte de Órdenes              | `stg_dropi_order`              | UPSERT en `pedidos`             |
-| `DOPI_ORDER_PRODUCT` | Reporte de Órdenes por Producto | `stg_dropi_order_product`      | Staging-only (sprint posterior) |
+### `POST /api/auth/login`
+```json
+// Body
+{ "username": "admin", "password": "admin123" }
 
----
+// 200 OK
+{ "status": 200, "data": { "accessToken": "eyJ...", "expiresIn": 3600 } }
+```
 
-## 3. Autenticación (JWT Stateless)
-
-No hay sesiones ni cookies. Todo se basa en **tokens JWT**.
-
-> A excepción del endpoint de Login, **todas las peticiones deben incluir esta cabecera**:
-> ```
-> Authorization: Bearer <TU_TOKEN_JWT>
-> ```
-
----
-
-## 4. Endpoints Disponibles
-
-### Auth
-
-#### `POST /api/auth/login`
-Obtiene el Token JWT.
-
-*   **Headers:** `Content-Type: application/json`
-*   **Body:**
-    ```json
-    {
-      "username": "admin",
-      "password": "admin123"
-    }
-    ```
-*   **Respuesta `200 OK`:**
-    ```json
-    {
-      "status": 200,
-      "message": "Operación exitosa",
-      "data": {
-        "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
-        "expiresIn": 3600
-      },
-      "timestamp": "2026-06-27T18:13:51Z"
-    }
-    ```
-*   **Error `401`:** Credenciales inválidas o usuario inactivo.
+### `GET /api/auth/me`
+```json
+// 200 OK
+{ "status": 200, "data": { "id": 1, "tenantId": 1, "username": "admin", "role": "ADMIN", "isActive": true } }
+```
 
 ---
 
-#### `GET /api/auth/me`
-Retorna el perfil del usuario autenticado.
+## Plantillas de importación soportadas
 
-*   **Respuesta `200 OK`:**
-    ```json
-    {
-      "status": 200,
-      "message": "Operación exitosa",
-      "data": {
-        "id": 1,
-        "tenantId": 1,
-        "username": "admin",
-        "role": "ADMIN",
-        "isActive": true,
-        "createdAt": "2026-06-27T16:55:12.36213Z"
-      },
-      "timestamp": "2026-06-27T18:13:51Z"
-    }
-    ```
+| `template` | Archivo | Tabla staging | Fase 2 |
+|---|---|---|---|
+| `DROPI_ORDER` | Reporte de Órdenes | `stg_dropi_order` | UPSERT en `ordenes` |
+| `DOPI_ORDER_PRODUCT` | Reporte Órdenes × Producto | `stg_dropi_order_product` | UPSERT en `ordenes` + `orden_items` + `producto_variaciones` |
 
 ---
 
-### Archivos y Jobs de Importación
+## Archivos y Jobs
 
-#### `POST /api/files/upload`
-Sube un archivo Excel de Dropi y crea un `ImportJob` en estado `PENDING`.
+### `POST /api/files/upload`
+Multipart: `file` (`.xlsx`/`.xls`) + `template` (string).
 
-El campo `template` indica qué tipo de archivo se está subiendo.  El módulo de upload es genérico — el procesamiento correcto se selecciona automáticamente en segundo plano según el valor de `template`.
+```json
+// 201 Created
+{ "status": 201, "data": { "jobId": 1, "fileId": 1 } }
+// 400 extensión inválida · 409 duplicado (mismo SHA-256)
+```
 
-*   **Content-Type:** `multipart/form-data`
-*   **Campos Form:**
-    *   `file` — el archivo `.xlsx` o `.xls`
-    *   `template` — tipo de plantilla (ver tabla de plantillas soportadas). Ejemplo: `DROPI_ORDER`, `DOPI_ORDER_PRODUCT`
-*   **Respuesta `201 Created`:**
-    ```json
-    {
-      "status": 201,
-      "message": "Archivo recibido, procesando.",
-      "data": {
-        "jobId": 1,
-        "fileId": 1
-      },
-      "timestamp": "2026-06-27T18:13:51Z"
-    }
-    ```
-*   **Error `400`:** Extensión no permitida (solo `.xlsx` / `.xls`).
-*   **Error `409`:** Archivo con el mismo contenido ya fue subido (SHA-256 duplicado).
+### `GET /api/import-jobs`
+`?status=PENDING|RUNNING|COMPLETED|ERROR&page=0&size=20`
+
+### `GET /api/import-jobs/{id}`
+Polling: campo `progress` 0–100.
 
 ---
 
-#### `GET /api/import-jobs`
-Lista los jobs de importación del tenant actual, paginados. Spring Data devuelve la estructura `Page<T>` estándar.
+## Staging — datos crudos
 
-*   **Query Params (opcionales):**
-    *   `status` — Filtra por: `PENDING`, `RUNNING`, `COMPLETED`, `ERROR`
-    *   `page` — Número de página (default `0`)
-    *   `size` — Elementos por página (default `20`)
+### `GET /api/staging/{jobId}`
+`?page=0&size=50&sortBy=id&sortDir=asc`
 
-*   **Respuesta `200 OK`:**
-    ```json
-    {
-      "status": 200,
-      "message": "Operación exitosa",
-      "data": {
-        "content": [
-          {
-            "id": 1,
-            "status": "COMPLETED",
-            "progress": 100,
-            "rowsDone": 2,
-            "rowsTotal": 2,
-            "template": "DOPI_ORDER_PRODUCT",
-            "startedAt": "2026-06-27T20:25:00Z",
-            "finishedAt": "2026-06-27T20:25:01Z",
-            "errorMsg": ""
-          }
-        ],
-        "totalElements": 1,
-        "totalPages": 1,
-        "size": 20,
-        "number": 0,
-        "first": true,
-        "last": true,
-        "empty": false
-      },
-      "timestamp": "2026-06-27T18:13:51Z"
-    }
-    ```
+### `GET /api/staging`
+`?template=DROPI_ORDER&page=0&size=50&sortBy=id&sortDir=desc`
+
+Respuesta:
+```json
+{
+  "template": "DROPI_ORDER",
+  "columns": [{ "key": "idDropi", "label": "ID Dropi", "type": "text" }],
+  "rows": [{ "idDropi": "61934139", "estatus": "ENTREGADO" }],
+  "totalElements": 92, "totalPages": 2, "page": 0, "size": 50
+}
+```
+`501` si el template no existe.
 
 ---
 
-#### `GET /api/import-jobs/{id}`
-Consulta el estado y progreso de un job específico. Ideal para **polling** desde el frontend (cada 2–3 segundos).
+## Dropi — datos normalizados
 
-*   **Respuesta `200 OK`:**
-    ```json
-    {
-      "status": 200,
-      "message": "Operación exitosa",
-      "data": {
-        "id": 1,
-        "status": "RUNNING",
-        "progress": 45,
-        "rowsDone": 450,
-        "rowsTotal": 1000,
-        "template": "DROPI_ORDER",
-        "startedAt": "2026-06-27T20:25:00Z",
-        "finishedAt": "",
-        "errorMsg": ""
-      },
-      "timestamp": "2026-06-27T18:13:51Z"
-    }
-    ```
-*   **Error `403`:** El job no existe o no pertenece al tenant del token.
+### Órdenes
 
----
+#### `GET /api/dropi/ordenes`
+```
+?estatus=ENTREGADO
+&ciudad=MEDELLIN
+&tiendaId=1
+&fechaDesde=2026-01-01    (ISO date)
+&fechaHasta=2026-06-30
+&page=0&size=50&sortBy=fecha&sortDir=desc
+```
 
-### Staging — Consulta de datos crudos
+Campos devueltos por fila: `id, dropiId, fecha, estatus, nombreCliente, telefono, ciudadDestino, departamentoDestino, transportadora, numeroGuia, totalOrden, ganancia, precioFlete, costoProveedorTotal, tienda, vendedor, tieneItems, createdAt`
 
-Los endpoints de staging devuelven las filas tal como fueron leídas del Excel, **antes** de cualquier transformación hacia tablas finales.  El parámetro `template` selecciona la tabla staging y las columnas correspondientes.
-
-#### `GET /api/staging/{jobId}`
-Devuelve una página de filas de staging filtrada por job específico.
-
-*   **Path param:** `jobId` — ID del import job
-*   **Query Params:**
-    *   `template` — Requerido. Ej: `DROPI_ORDER`, `DOPI_ORDER_PRODUCT`
-    *   `page` — (default `0`)
-    *   `size` — (default `20`)
-    *   `sortBy` — Campo de ordenación (ver columnas `SORTABLE` de cada plantilla, default `id`)
-    *   `sortDir` — `asc` o `desc` (default `asc`)
-
-*   **Respuesta `200 OK`:**
-    ```json
-    {
-      "status": 200,
-      "message": "Operación exitosa",
-      "data": {
-        "template": "DOPI_ORDER_PRODUCT",
-        "columns": [
-          { "key": "idDropi",   "label": "ID Dropi",  "type": "text"   },
-          { "key": "producto",  "label": "Producto",  "type": "text"   },
-          { "key": "cantidad",  "label": "Cantidad",  "type": "number" }
-        ],
-        "rows": [
-          {
-            "id": 1,
-            "idDropi": "61934139",
-            "producto": "Cargador retractil para carro",
-            "cantidad": "1",
-            "sku": "nova19",
-            "estatus": "ENTREGADO"
-          }
-        ],
-        "totalElements": 2,
-        "totalPages": 1,
-        "page": 0,
-        "size": 20
-      },
-      "timestamp": "2026-06-27T18:13:51Z"
-    }
-    ```
-*   **Error `400`:** Falta el parámetro `template`.
-*   **Error `501`:** Plantilla no soportada (no existe un `StagingTableReader` para ese valor).
-
----
-
-#### `GET /api/staging`
-Devuelve una página con **todas** las filas del tenant para una plantilla dada (sin filtrar por job).
-
-*   **Query Params:**
-    *   `template` — Requerido. Ej: `DROPI_ORDER`, `DOPI_ORDER_PRODUCT`
-    *   `page`, `size`, `sortBy`, `sortDir` — Igual que el endpoint anterior
-
-*   **Respuesta:** Mismo esquema que `GET /api/staging/{jobId}`.
-
----
-
-### Columnas sortables por plantilla
-
-| Plantilla             | Campos sortables |
-|-----------------------|-----------------|
-| `DROPI_ORDER`         | `id`, `importJobId`, `rowNumber`, `processingStatus`, `idDropi`, `fechaDeReporte`, `estatus`, `nombreCliente`, `createdAt` |
-| `DOPI_ORDER_PRODUCT`  | `id`, `importJobId`, `rowNumber`, `processingStatus`, `idDropi`, `fechaDeReporte`, `estatus`, `nombreCliente`, `productoId`, `sku`, `createdAt` |
-
----
-
-## 5. Manejo de Errores Estándar
-
-Todos los errores pasan por el `GlobalExceptionHandler` y tienen este formato uniforme:
+#### `GET /api/dropi/ordenes/{id}`
+Detalle completo: campos de envío, precios (tienda), facturación, tienda, novedad, cliente, **items** (productos pedidos con variación y precio proveedor).
 
 ```json
 {
-  "status": 409,
-  "message": "Este archivo ya fue subido anteriormente (mismo contenido).",
-  "data": null,
-  "timestamp": "2026-06-27T18:13:51Z"
+  "dropiId": "61934139",
+  "estatus": "ENTREGADO",
+  "cliente": { "nombre": "Marlon Parada", "telefono": "3232518288" },
+  "items": [
+    {
+      "sku": "nova19",
+      "nombreProducto": "Cargador retractil para carro",
+      "nombreVariacion": null,
+      "variacionIdDropi": null,
+      "cantidad": 1,
+      "precioProveedor": 32000,
+      "precioProveedorXCantidad": 32000,
+      "porcentajeComisionPlataforma": 5
+    }
+  ]
 }
 ```
 
-| Código | Situación                                         |
-|--------|---------------------------------------------------|
-| `400`  | Body/archivo inválido o parámetro requerido faltante |
-| `401`  | Sin token o credenciales incorrectas en login     |
-| `403`  | Recurso de otro tenant / no encontrado            |
-| `409`  | Conflicto (ej: archivo duplicado)                 |
-| `501`  | Plantilla no soportada en staging                 |
-| `500`  | Error interno — incluye campo `message` adicional |
+---
+
+### Clientes
+
+#### `GET /api/dropi/clientes`
+`?q=marlon&page=0&size=50` — búsqueda por nombre/teléfono/email.
 
 ---
 
-## 6. Extensibilidad — Cómo añadir una nueva plantilla
+### Productos
 
-Para integrar un nuevo tipo de archivo sin modificar código existente:
+#### `GET /api/dropi/productos`
+`?page=0&size=50` — catálogo con `qtyTotal` y `ordenesCount`.
+Solo tiene datos si se subió `DOPI_ORDER_PRODUCT`.
 
-1. **Migración SQL** — Crear `V{N}__add_stg_{nombre}.sql` con la nueva tabla staging.
-2. **JPA Entity** — `StgNombreEntity.java` mapeada a esa tabla.
-3. **Repository** — `StgNombreRepository.java` extendiendo `JpaRepository`.
-4. **Processor** — `NombreProcessor.java` implementando `ImportProcessor`:
-   - `supports(template)` devuelve `true` para el nuevo valor de `template`.
-   - `loadToStaging()` lee el Excel y hace batch insert en la nueva tabla.
-   - `processStaging()` implementa la lógica de negocio (o staging-only si aún no hay tabla final).
-5. **StagingReader** — `NombreStagingReader.java` implementando `StagingTableReader`:
-   - `getTemplate()` devuelve el mismo valor que el processor.
-   - Define las columnas (`getColumns()`) y el mapeo entidad → `Map<String,Object>`.
+#### `GET /api/dropi/productos/{id}/variaciones`
+Lista de variaciones del producto: `[{ variacionIdDropi, nombreVariacion }]`
 
-El scheduler, el `StagingService` y todos los controllers descubren los nuevos beans automáticamente vía inyección de `List<ImportProcessor>` y `List<StagingTableReader>`.
+---
+
+### Stats / Dashboard
+
+#### `GET /api/dropi/stats`
+```
+?fechaDesde=2026-06-22    (ISO date, opcional)
+&fechaHasta=2026-06-28    (ISO date, opcional)
+```
+Default: últimos 7 días si no se envían parámetros.
+
+Calcula automáticamente el % de cambio vs. el período anterior de igual duración.
+
+```json
+{
+  "totalOrdenes": 92,
+  "ventaTotal": 8730800,
+  "gananciaTotal": 3651636,
+  "ordenesEntregadas": 47,
+  "tasaEntrega": 51.1,
+  "fleteTotal": 1792486,
+  "comisionTotal": 347426,
+  "margenNeto": 41.82,
+  "pctVenta": 12.4,
+  "pctGanancia": 8.1,
+  "pctOrdenes": -3.2,
+  "pctCostoProveedor": 10.2,
+  "unidadesTotal": 939,
+  "costoProveedorTotal": 30048000,
+  "ordenesConItems": 61,
+  "porEstatus": [
+    { "estatus": "ENTREGADO", "count": 47, "montoTotal": 4463650 }
+  ],
+  "topCiudades": [
+    { "ciudad": "BOGOTA", "count": 18, "montoTotal": 1706400 }
+  ],
+  "evolucionDiaria": [
+    { "fecha": "2026-06-22", "count": 5, "gananciaTotal": 198450, "ventaTotal": 474500 }
+  ],
+  "topProductos": [
+    { "nombre": "Cargador retractil para carro", "sku": "nova19", "qtyTotal": 939, "ordenesCount": 61 }
+  ],
+  "ordenesActivas": [
+    { "id": 12, "dropiId": "61934139", "estatus": "EN CAMINO", "transportadora": "INTERRAPIDISIMO",
+      "fecha": "2026-06-27", "totalOrden": 94900, "ciudadDestino": "CUCUTA", "diasActiva": 1 }
+  ]
+}
+```
+
+---
+
+## Errores estándar
+
+```json
+{ "status": 409, "message": "Archivo duplicado.", "data": null, "timestamp": "..." }
+```
+
+| Código | Situación |
+|---|---|
+| `400` | Body/archivo inválido |
+| `401` | Sin token o credenciales incorrectas |
+| `403` | Recurso de otro tenant |
+| `409` | Conflicto (archivo duplicado) |
+| `501` | Template de staging no soportado |
+| `500` | Error interno |
+
+---
+
+## Cómo añadir una nueva plantilla
+
+1. `V{N}__add_stg_{nombre}.sql` — nueva tabla staging
+2. `StgNombreEntity` + `StgNombreRepository`
+3. `NombreProcessor implements ImportProcessor` — `supports("NUEVO_TEMPLATE")`
+4. `NombreStagingReader implements StagingTableReader` — `getTemplate()="NUEVO_TEMPLATE"`
+5. Añadir `{ id: "NUEVO_TEMPLATE", label: "...", description: "..." }` en `frontend/src/lib/templates.ts`
+
+El scheduler, `StagingService` y el selector de upload lo descubren automáticamente.

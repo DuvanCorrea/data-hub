@@ -29,9 +29,9 @@ public class DropiOrderStagingReader implements StagingTableReader {
 
     private static final List<StagingColumnDef> COLUMNS = List.of(
             new StagingColumnDef("id",                          "ID",                       "number"),
-            new StagingColumnDef("importJobId",                 "Job ID",                   "number"),
+            new StagingColumnDef("importJobId",                 "Importación #",            "number"),
             new StagingColumnDef("rowNumber",                   "Fila",                     "number"),
-            new StagingColumnDef("processingStatus",            "Estado staging",           "status"),
+            new StagingColumnDef("processingStatus",            "Estado",                   "status"),
             new StagingColumnDef("idDropi",                     "ID Dropi",                 "text"),
             new StagingColumnDef("ordenDeDropshipper",          "Orden dropshipper",        "text"),
             new StagingColumnDef("fechaDeReporte",              "Fecha reporte",            "text"),

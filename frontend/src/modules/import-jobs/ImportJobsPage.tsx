@@ -121,7 +121,7 @@ function JobCard({ job }: { job: ImportJobDto }) {
                 variant="outline"
                 size="sm"
                 className="h-7 text-xs gap-1.5"
-                onClick={() => navigate(`/staging?jobId=${job.id}`)}
+                onClick={() => navigate(`/staging?jobId=${job.id}&template=${job.template}`)}
               >
                 <Table2 className="h-3.5 w-3.5" />
                 Ver datos

@@ -6,6 +6,7 @@ import { importJobsService } from "./import-jobs.service";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { TEMPLATES } from "@/lib/templates";
 
 type UploadState = "idle" | "uploading" | "success" | "error";
 
@@ -98,15 +99,19 @@ export function UploadPage() {
           <CardContent className="space-y-4">
             {/* Template selector */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Plataforma / Tipo de archivo</label>
+              <label className="text-sm font-medium">Tipo de archivo</label>
               <select
                 value={template}
                 onChange={(e) => setTemplate(e.target.value)}
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
               >
-                <option value="DROPI_ORDER">Dropi - Órdenes</option>
-                {/* Future platforms can be added here */}
+                {TEMPLATES.map((t) => (
+                  <option key={t.id} value={t.id}>{t.label}</option>
+                ))}
               </select>
+              <p className="text-xs text-muted-foreground">
+                {TEMPLATES.find((t) => t.id === template)?.description}
+              </p>
             </div>
 
             {/* Drop zone */}

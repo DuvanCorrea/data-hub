@@ -177,7 +177,29 @@ export interface ProductoDto {
   createdAt: string;
 }
 
-// ─── Dropi — Stats / Dashboard ───────────────────────────────────────────────
+// ─── Parámetros de configuración ─────────────────────────────────────────────
+
+export interface ParametroOpcionDto {
+  valor: string;
+  etiqueta: string;
+}
+
+export interface ParametroDto {
+  id: number;
+  aplicacion: string;
+  clave: string;
+  etiqueta: string;
+  descripcion: string | null;
+  tipoDato: "STRING" | "NUMBER" | "BOOLEAN" | "SELECT";
+  valor: string;
+  valorDefecto: string;
+  valorModificado: boolean;
+  opciones: ParametroOpcionDto[];
+  esEditable: boolean;
+  orden: number;
+  updatedAt: string | null;
+  updatedBy: number | null;
+}
 
 export interface EstatusCount  { estatus: string; count: number; montoTotal: number; }
 export interface CiudadCount   { ciudad: string;  count: number; montoTotal: number; }

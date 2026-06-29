@@ -24,7 +24,8 @@ public class ImportJobScheduler {
 
     private final ImportJobRepository jobRepository;
     private final ImportFileRepository fileRepository;
-    private final List<ImportProcessor> processors;  // Spring inyecta todos los implementors
+    private final List<ImportProcessor> processors;
+    private final ParametroService parametroService;
 
     /**
      * Poll cada N ms: toma el siguiente job PENDING de forma atómica y lo procesa.
@@ -68,7 +69,8 @@ public class ImportJobScheduler {
         jobRepository.findAll().stream()
                 .filter(j -> "RUNNING".equals(j.getStatus())
                         && j.getUpdatedAt() != null
-                        && j.getUpdatedAt().isBefore(OffsetDateTime.now().minusMinutes(10)))
+                        && j.getUpdatedAt().isBefore(OffsetDateTime.now().minusMinutes(
+                                parametroService.getOrphanTimeoutMin())))
                 .forEach(j -> {
                     j.setStatus("PENDING");
                     jobRepository.save(j);

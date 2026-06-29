@@ -31,6 +31,7 @@ public class FileImportService {
 
     private final ImportFileRepository fileRepository;
     private final ImportJobRepository jobRepository;
+    private final ParametroService parametroService;
 
     @Value("${app.storage.path}")
     private String storagePath;
@@ -42,6 +43,13 @@ public class FileImportService {
         if (originalName == null ||
                 (!originalName.toLowerCase().endsWith(".xlsx") && !originalName.toLowerCase().endsWith(".xls"))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Solo se permiten archivos .xlsx o .xls");
+        }
+
+        // 1b. Validar tamaño máximo según parámetro IMPORT_MAX_FILE_MB
+        long maxBytes = (long) parametroService.getMaxFileMb() * 1024 * 1024;
+        if (file.getSize() > maxBytes) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El archivo supera el tamaño máximo permitido de " + parametroService.getMaxFileMb() + " MB.");
         }
 
         // 2. SHA-256 del contenido

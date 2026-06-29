@@ -11,6 +11,7 @@ import { OrdenesPage } from "@/modules/dropi/OrdenesPage";
 import { OrdenDetallePage } from "@/modules/dropi/OrdenDetallePage";
 import { ClientesPage } from "@/modules/dropi/ClientesPage";
 import { ProductosPage } from "@/modules/dropi/ProductosPage";
+import { SettingsPage } from "@/modules/settings/SettingsPage";
 
 export function App() {
   return (
@@ -40,6 +41,7 @@ export function App() {
             <Route path="dropi/ordenes/:id"    element={<OrdenDetallePage />} />
             <Route path="dropi/clientes"       element={<ClientesPage />} />
             <Route path="dropi/productos"      element={<ProductosPage />} />
+            <Route path="settings"             element={<SettingsPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

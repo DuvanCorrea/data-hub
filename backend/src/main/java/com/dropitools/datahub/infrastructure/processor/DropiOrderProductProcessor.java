@@ -2,6 +2,7 @@ package com.dropitools.datahub.infrastructure.processor;
 
 import com.dropitools.datahub.application.DropisNormalizationService;
 import com.dropitools.datahub.application.DropisNormalizationService.OrdenFields;
+import com.dropitools.datahub.application.ParametroService;
 import com.dropitools.datahub.domain.model.ImportJob;
 import com.dropitools.datahub.domain.port.ImportProcessor;
 import com.dropitools.datahub.infrastructure.persistence.entity.*;
@@ -42,6 +43,7 @@ public class DropiOrderProductProcessor implements ImportProcessor {
     private final ProductoRepository                productoRepo;
     private final OrdenItemRepository               itemRepo;
     private final ProductoVariacionRepository       variacionRepo;
+    private final ParametroService                  parametroService;
 
     @Override
     public boolean supports(String template) { return TEMPLATE.equalsIgnoreCase(template); }
@@ -58,11 +60,14 @@ public class DropiOrderProductProcessor implements ImportProcessor {
         try { rows = excelReader.readRows(filePath); }
         catch (IllegalStateException e) { failJob(job.getId(), e.getMessage()); return; }
 
-        List<StgDropiOrderProductEntity> batch = new ArrayList<>(BATCH_SIZE);
+        List<StgDropiOrderProductEntity> batch = new ArrayList<>();
+        int batchSize = parametroService.getBatchSize();
         int rowNum = 1;
         for (Map<String, String> row : rows) {
             batch.add(mapRowToStaging(row, job, rowNum++));
-            if (batch.size() == BATCH_SIZE) { stagingRepo.saveAll(batch); em.flush(); em.clear(); batch.clear(); }
+            if (batchSize < Integer.MAX_VALUE && batch.size() == batchSize) {
+                stagingRepo.saveAll(batch); em.flush(); em.clear(); batch.clear();
+            }
         }
         if (!batch.isEmpty()) stagingRepo.saveAll(batch);
 
@@ -81,8 +86,9 @@ public class DropiOrderProductProcessor implements ImportProcessor {
         long errors = 0;
 
         while (true) {
+            int pageSize = Math.min(parametroService.getBatchSize(), 500);
             List<StgDropiOrderProductEntity> batch = stagingRepo.findByImportJobIdAndProcessingStatus(
-                    job.getId(), "PENDING", PageRequest.of(0, BATCH_SIZE));
+                    job.getId(), "PENDING", PageRequest.of(0, pageSize));
             if (batch.isEmpty()) break;
 
             for (StgDropiOrderProductEntity stg : batch) {

@@ -20,17 +20,23 @@ import type { DropisStatsDto, OrdenActivaItem } from "@/contracts/api.types";
 import { DateRangePicker } from "./components/DateRangePicker";
 import type { DateRange } from "./components/DateRangePicker";
 import { StatusBadge } from "@/components/data-table/DataTable";
+import { settingsService } from "@/modules/settings/settings.service";
 import { cn } from "@/lib/utils";
 
-// ── Formatters ────────────────────────────────────────────────────────────────
-const COP = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
-const NUM = new Intl.NumberFormat("es-CO");
-const SHORT = new Intl.NumberFormat("es-CO", { notation: "compact", maximumFractionDigits: 2 });
+// ── Formatters (se actualizan cuando cambia la moneda) ────────────────────────
+function makeCOP(moneda: string) {
+  return new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: moneda === "USD" ? "USD" : moneda === "EUR" ? "EUR" : "COP",
+    maximumFractionDigits: 0,
+  });
+}
+const NUM    = new Intl.NumberFormat("es-CO");
+const SHORT  = new Intl.NumberFormat("es-CO", { notation: "compact", maximumFractionDigits: 2 });
 
-function shortCOP(n: number) {
+function shortCOP(n: number, fmt: Intl.NumberFormat) {
   if (Math.abs(n) >= 1_000_000) return `$${SHORT.format(n)}`;
-  if (Math.abs(n) >= 1_000)     return COP.format(n);
-  return COP.format(n);
+  return fmt.format(n);
 }
 
 function fmtDate(iso: string) {
@@ -39,9 +45,9 @@ function fmtDate(iso: string) {
   return `${d}/${m}`;
 }
 
-function defaultRange(): DateRange {
+function defaultRange(dias = 7): DateRange {
   const today = new Date();
-  const desde = new Date(today); desde.setDate(today.getDate() - 6);
+  const desde = new Date(today); desde.setDate(today.getDate() - Math.max(dias - 1, 0));
   const toIso = (d: Date) => d.toISOString().slice(0, 10);
   return { desde: toIso(desde), hasta: toIso(today) };
 }
@@ -114,7 +120,7 @@ function ChartTooltip({ active, payload, label }: any) {
       <p className="font-medium text-muted-foreground">{label}</p>
       {payload.map((p: any) => (
         <p key={p.name} style={{ color: p.color }} className="tabular-nums">
-          {p.name}: {shortCOP(p.value)}
+          {p.name}: {shortCOP(Number(p.value ?? 0), makeCOP("COP"))}
         </p>
       ))}
     </div>
@@ -124,10 +130,23 @@ function ChartTooltip({ active, payload, label }: any) {
 // ── Componente principal ──────────────────────────────────────────────────────
 export function DashboardPage() {
   const navigate = useNavigate();
-  const [range, setRange]   = useState<DateRange>(defaultRange());
-  const [stats, setStats]   = useState<DropisStatsDto | null>(null);
+  const [range, setRange]     = useState<DateRange>(defaultRange(7));
+  const [moneda, setMoneda]   = useState("COP");
+  const [stats, setStats]     = useState<DropisStatsDto | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState<string | null>(null);
+  const [error, setError]     = useState<string | null>(null);
+
+  const COP = makeCOP(moneda);
+
+  // Cargar parámetros del servidor (rango por defecto y moneda)
+  useEffect(() => {
+    settingsService.list().then(params => {
+      const rangoDias = params.find(p => p.clave === "DASHBOARD_RANGO_DIAS");
+      const mon       = params.find(p => p.clave === "DROPI_MONEDA");
+      if (rangoDias) setRange(defaultRange(Number(rangoDias.valor) || 7));
+      if (mon)       setMoneda(mon.valor);
+    }).catch(() => {/* usar defaults */});
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -189,20 +208,20 @@ export function DashboardPage() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard
           label="Total Ventas"
-          value={shortCOP(stats?.ventaTotal ?? 0)}
+          value={shortCOP(stats?.ventaTotal ?? 0, COP ?? 0)}
           icon={faMoneyBillWave}
           pct={stats?.pctVenta}
         />
         <KpiCard
           label="Ganancia Total"
-          value={shortCOP(stats?.gananciaTotal ?? 0)}
+          value={shortCOP(stats?.gananciaTotal ?? 0, COP ?? 0)}
           icon={faChartLine}
           pct={stats?.pctGanancia}
           accent
         />
         <KpiCard
           label="Costo Proveedores"
-          value={shortCOP(stats?.costoProveedorTotal ?? 0)}
+          value={shortCOP(stats?.costoProveedorTotal ?? 0, COP ?? 0)}
           sub={hasItems ? `${NUM.format(stats?.unidadesTotal ?? 0)} unidades` : undefined}
           icon={faBoxes}
           pct={stats?.pctCostoProveedor}
@@ -401,3 +420,5 @@ export function DashboardPage() {
 }
 
 const COLORS = ["#6366f1","#22c55e","#f97316","#06b6d4","#a855f7","#eab308","#ef4444","#14b8a6"];
+
+

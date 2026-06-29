@@ -128,4 +128,19 @@ public class ParametroService {
                 .orElseThrow(() -> new IllegalArgumentException("Parámetro no encontrado: " + clave));
         return update(clave, p.getValorDefecto(), updatedBy);
     }
+
+    @Transactional
+    public void resetAll(Long updatedBy) {
+        repo.findAll().forEach(p -> {
+            if (Boolean.TRUE.equals(p.getEsEditable())) {
+                p.setValor(p.getValorDefecto());
+                p.setUpdatedBy(updatedBy);
+                cache.put(p.getClave(), p.getValorDefecto());
+            }
+        });
+        repo.findAll().forEach(p -> {
+            if (Boolean.TRUE.equals(p.getEsEditable())) repo.save(p);
+        });
+        log.info("{\"action\":\"PARAMETROS_RESET_ALL\",\"updatedBy\":{}}", updatedBy);
+    }
 }

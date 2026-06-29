@@ -68,7 +68,20 @@ public class ParametroController {
         return ResponseEntity.ok(ApiResponse.success(toDto(saved)));
     }
 
-    // ── Mapper ─────────────────────────────────────────────────────────────────
+    /** Resetea TODOS los parámetros a su valor por defecto — solo ADMIN */
+    @PostMapping("/reset-all")
+    public ResponseEntity<ApiResponse<List<ParametroDto>>> resetAll(
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        if (!"ADMIN".equals(principal.getRole())) {
+            return ResponseEntity.status(403)
+                    .body(ApiResponse.error(403, "Solo administradores pueden modificar parámetros."));
+        }
+        service.resetAll(principal.getId());
+        List<ParametroDto> dtos = service.listAll().stream()
+                .map(this::toDto).collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.success(dtos));
+    }
 
     private ParametroDto toDto(ParametroEntity e) {
         List<ParametroDto.OpcionDto> opciones = parseOpciones(e.getOpciones());

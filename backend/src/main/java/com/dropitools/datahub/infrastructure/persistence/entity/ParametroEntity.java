@@ -34,8 +34,8 @@ public class ParametroEntity {
     @Column(name = "valor_defecto", nullable = false, columnDefinition = "TEXT")
     private String valorDefecto;
 
-    // JSONB almacenado como String — [{valor,etiqueta}]
-    @Column(name = "opciones", columnDefinition = "JSONB")
+    // TEXT en vez de JSONB: evita el conflicto de tipos con el binding de Hibernate
+    @Column(name = "opciones", columnDefinition = "TEXT")
     private String opciones;
 
     @Column(name = "es_editable", nullable = false)

@@ -22,4 +22,9 @@ export const settingsService = {
     );
     return res.data.data;
   },
+
+  async resetAll(): Promise<ParametroDto[]> {
+    const res = await http.post<ApiResponse<ParametroDto[]>>("/api/parametros/reset-all");
+    return res.data.data;
+  },
 };

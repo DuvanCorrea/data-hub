@@ -1,0 +1,568 @@
+{
+  "info": {
+    "name": "ERPNext - Prendas de Vestir v1",
+    "_postman_id": "erpnext-prendas-v1",
+    "description": "Colección base para integración con ERPNext v16. Cubre Clientes, Productos (con variantes Color+Talla) y Órdenes de Venta. Sistema externo envía datos a ERPNext.\n\n**Flujo recomendado:**\n1. Verificar si cliente existe → crear si no\n2. Verificar si variante existe → crear si no\n3. Crear Orden de Venta\n\n**Códigos de respuesta clave:**\n- 200/201 → Éxito\n- 400 → Datos inválidos\n- 403 → Sin permisos\n- 404 → No encontrado\n- 409 → Ya existe (DuplicateEntryError)\n- 417 → Validación fallida (link roto, campo requerido vacío)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://192.168.1.74:9999",
+      "type": "string",
+      "description": "URL base del servidor ERPNext"
+    },
+    {
+      "key": "auth",
+      "value": "Basic NTY1NzU4YjQzMmQyNWE3OjNiNzlmMTA3MDcwODkyMg==",
+      "type": "string",
+      "description": "Header de autenticación Basic Auth (base64 de api_key:api_secret)"
+    },
+    {
+      "key": "customer_name",
+      "value": "CUST-0001",
+      "type": "string",
+      "description": "ID del cliente de prueba (se actualiza al crear)"
+    },
+    {
+      "key": "item_template_code",
+      "value": "CAMISETA-001",
+      "type": "string",
+      "description": "Código del ítem plantilla (con variantes)"
+    },
+    {
+      "key": "item_variant_code",
+      "value": "CAMISETA-001-ROJO-M",
+      "type": "string",
+      "description": "Código de la variante específica (Color-Talla)"
+    },
+    {
+      "key": "sales_order_name",
+      "value": "SO-2026-00001",
+      "type": "string",
+      "description": "ID de la orden de venta (se actualiza al crear)"
+    }
+  ],
+  "item": [
+    {
+      "name": "🔌 Conexión",
+      "item": [
+        {
+          "name": "Verificar conexión y usuario activo",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/method/frappe.auth.get_logged_user",
+              "host": ["{{base_url}}"],
+              "path": ["api", "method", "frappe.auth.get_logged_user"]
+            },
+            "description": "Verifica que la autenticación funciona y retorna el usuario activo.\n\n✅ Respuesta exitosa (200):\n{\n  \"message\": \"administrador@empresa.com\"\n}\n\n❌ Error (403):\n{\n  \"exc_type\": \"AuthenticationError\"\n}"
+          }
+        },
+        {
+          "name": "Listar DocTypes disponibles (prueba de permisos)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/resource/DocType?fields=[\"name\"]&filters=[[\"DocType\",\"module\",\"in\",[\"Selling\",\"Stock\"]]]&limit_page_length=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "DocType"],
+              "query": [
+                { "key": "fields", "value": "[\"name\"]" },
+                { "key": "filters", "value": "[[\"DocType\",\"module\",\"in\",[\"Selling\",\"Stock\"]]]" },
+                { "key": "limit_page_length", "value": "20" }
+              ]
+            },
+            "description": "Lista los DocTypes de los módulos de Ventas e Inventario. Útil para verificar permisos."
+          }
+        }
+      ]
+    },
+    {
+      "name": "👥 Clientes",
+      "item": [
+        {
+          "name": "1. Listar clientes",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/resource/Customer?fields=[\"name\",\"customer_name\",\"customer_type\",\"mobile_no\",\"email_id\",\"territory\",\"creation\",\"modified\"]&order_by=creation%20desc&limit_page_length=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Customer"],
+              "query": [
+                { "key": "fields", "value": "[\"name\",\"customer_name\",\"customer_type\",\"mobile_no\",\"email_id\",\"territory\",\"creation\",\"modified\"]" },
+                { "key": "order_by", "value": "creation desc" },
+                { "key": "limit_page_length", "value": "20" }
+              ]
+            },
+            "description": "Retorna lista de clientes con sus campos principales.\n\n✅ Respuesta (200):\n{\n  \"data\": [\n    {\n      \"name\": \"CUST-0001\",\n      \"customer_name\": \"María García\",\n      \"customer_type\": \"Individual\",\n      \"mobile_no\": \"3001234567\",\n      \"email_id\": \"maria@correo.com\"\n    }\n  ]\n}"
+          }
+        },
+        {
+          "name": "2. Buscar cliente por nombre o email",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/resource/Customer?fields=[\"name\",\"customer_name\",\"mobile_no\",\"email_id\"]&filters=[[\"Customer\",\"customer_name\",\"like\",\"%María%\"]]",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Customer"],
+              "query": [
+                { "key": "fields", "value": "[\"name\",\"customer_name\",\"mobile_no\",\"email_id\"]" },
+                { "key": "filters", "value": "[[\"Customer\",\"customer_name\",\"like\",\"%María%\"]]" }
+              ]
+            },
+            "description": "Busca clientes por nombre (parcial con LIKE). Cambia el filtro para buscar por email:\nfiltros=[[\"Customer\",\"email_id\",\"=\",\"maria@correo.com\"]]\n\n⚠️ Si el array 'data' viene vacío [] → el cliente NO existe → usar endpoint de creación."
+          }
+        },
+        {
+          "name": "3. Obtener cliente por ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/resource/Customer/{{customer_name}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Customer", "{{customer_name}}"]
+            },
+            "description": "Obtiene todos los campos de un cliente por su ID (name).\n\n✅ Respuesta (200):\n{\n  \"data\": {\n    \"name\": \"CUST-0001\",\n    \"customer_name\": \"María García\",\n    ...\n  }\n}\n\n❌ No existe (404):\n{\n  \"exc_type\": \"DoesNotExistError\",\n  \"exception\": \"frappe.exceptions.DoesNotExistError: ...\"\n}"
+          }
+        },
+        {
+          "name": "4. Crear cliente",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"doctype\": \"Customer\",\n  \"customer_name\": \"María García\",\n  \"customer_type\": \"Individual\",\n  \"customer_group\": \"Individual\",\n  \"territory\": \"Colombia\",\n  \"mobile_no\": \"3001234567\",\n  \"email_id\": \"maria@correo.com\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/resource/Customer",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Customer"]
+            },
+            "description": "Crea un cliente nuevo.\n\n✅ Respuesta (200/201):\n{\n  \"data\": {\n    \"name\": \"CUST-0001\",\n    \"customer_name\": \"María García\",\n    \"docstatus\": 0,\n    ...\n  }\n}\n\n❌ Ya existe con mismo nombre (409):\n{\n  \"exception\": \"frappe.exceptions.DuplicateEntryError: ...\",\n  \"exc_type\": \"DuplicateEntryError\",\n  \"_server_messages\": \"...\"\n}\n\n⚠️ customer_group y territory deben existir en ERPNext. Verificar con:\nGET /api/resource/Customer Group\nGET /api/resource/Territory"
+          }
+        },
+        {
+          "name": "5. Actualizar cliente",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobile_no\": \"3009876543\",\n  \"email_id\": \"maria.nueva@correo.com\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/resource/Customer/{{customer_name}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Customer", "{{customer_name}}"]
+            },
+            "description": "Actualiza campos de un cliente. Solo envías los campos que quieres cambiar, no el documento completo.\n\n✅ Respuesta (200): documento actualizado completo.\n❌ No existe (404): DoesNotExistError."
+          }
+        },
+        {
+          "name": "6. Listar grupos de clientes (referencia)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/resource/Customer Group?fields=[\"name\",\"parent_customer_group\",\"is_group\"]",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Customer Group"],
+              "query": [
+                { "key": "fields", "value": "[\"name\",\"parent_customer_group\",\"is_group\"]" }
+              ]
+            },
+            "description": "Lista los grupos de cliente disponibles. Necesario para saber qué valor usar en 'customer_group' al crear clientes."
+          }
+        }
+      ]
+    },
+    {
+      "name": "👕 Productos y Variantes",
+      "item": [
+        {
+          "name": "7. Listar ítems plantilla (con variantes)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/resource/Item?fields=[\"name\",\"item_code\",\"item_name\",\"item_group\",\"has_variants\",\"disabled\"]&filters=[[\"Item\",\"has_variants\",\"=\",1]]&order_by=item_code%20asc",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Item"],
+              "query": [
+                { "key": "fields", "value": "[\"name\",\"item_code\",\"item_name\",\"item_group\",\"has_variants\",\"disabled\"]" },
+                { "key": "filters", "value": "[[\"Item\",\"has_variants\",\"=\",1]]" },
+                { "key": "order_by", "value": "item_code asc" }
+              ]
+            },
+            "description": "Lista solo los ítems plantilla (padre de variantes). Estos son los productos base como 'CAMISETA-001' sin color ni talla.\n\n✅ Respuesta:\n{\n  \"data\": [\n    {\n      \"name\": \"CAMISETA-001\",\n      \"item_name\": \"Camiseta Básica\",\n      \"has_variants\": 1\n    }\n  ]\n}"
+          }
+        },
+        {
+          "name": "8. Listar variantes de un ítem plantilla",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/resource/Item?fields=[\"name\",\"item_code\",\"item_name\",\"variant_of\",\"disabled\"]&filters=[[\"Item\",\"variant_of\",\"=\",\"{{item_template_code}}\"]]&order_by=item_code%20asc",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Item"],
+              "query": [
+                { "key": "fields", "value": "[\"name\",\"item_code\",\"item_name\",\"variant_of\",\"disabled\"]" },
+                { "key": "filters", "value": "[[\"Item\",\"variant_of\",\"=\",\"{{item_template_code}}\"]]" },
+                { "key": "order_by", "value": "item_code asc" }
+              ]
+            },
+            "description": "Lista todas las variantes (Color+Talla) de un ítem plantilla específico.\n\nUsa la variable {{item_template_code}} o reemplaza el nombre del template en el filtro.\n\n✅ Respuesta:\n{\n  \"data\": [\n    { \"item_code\": \"CAMISETA-001-ROJO-M\", \"variant_of\": \"CAMISETA-001\" },\n    { \"item_code\": \"CAMISETA-001-AZUL-L\", \"variant_of\": \"CAMISETA-001\" }\n  ]\n}\n\n⚠️ Si data=[] → la variante no existe → usar endpoint 11 para crearla."
+          }
+        },
+        {
+          "name": "9. Obtener detalle de una variante (con atributos)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/resource/Item/{{item_variant_code}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Item", "{{item_variant_code}}"]
+            },
+            "description": "Obtiene el detalle completo de una variante, incluyendo su array 'attributes' con Color y Talla.\n\n✅ Respuesta:\n{\n  \"data\": {\n    \"item_code\": \"CAMISETA-001-ROJO-M\",\n    \"item_name\": \"Camiseta Básica - Rojo - M\",\n    \"variant_of\": \"CAMISETA-001\",\n    \"attributes\": [\n      { \"attribute\": \"Color\", \"attribute_value\": \"Rojo\" },\n      { \"attribute\": \"Talla\", \"attribute_value\": \"M\" }\n    ]\n  }\n}\n\n❌ No existe (404): DoesNotExistError"
+          }
+        },
+        {
+          "name": "10. Buscar variante por atributos (Color + Talla)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/resource/Item?fields=[\"name\",\"item_code\",\"item_name\",\"variant_of\"]&filters=[[\"Item\",\"variant_of\",\"=\",\"{{item_template_code}}\"],[\"Item Variant Attribute\",\"attribute\",\"=\",\"Color\"],[\"Item Variant Attribute\",\"attribute_value\",\"=\",\"Rojo\"]]",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Item"],
+              "query": [
+                { "key": "fields", "value": "[\"name\",\"item_code\",\"item_name\",\"variant_of\"]" },
+                { "key": "filters", "value": "[[\"Item\",\"variant_of\",\"=\",\"{{item_template_code}}\"],[\"Item Variant Attribute\",\"attribute\",\"=\",\"Color\"],[\"Item Variant Attribute\",\"attribute_value\",\"=\",\"Rojo\"]]" }
+              ]
+            },
+            "description": "Busca variantes filtrando por un atributo específico (ej: todas las camisetas rojas).\n\n⚠️ Para buscar por dos atributos (Color Y Talla) es más confiable obtener todas las variantes del template (endpoint 8) y filtrar en tu sistema externo, ya que ERPNext puede no soportar múltiples filtros de child table en todos los casos."
+          }
+        },
+        {
+          "name": "11. Crear variante de ítem (Color + Talla)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"doctype\": \"Item\",\n  \"item_code\": \"CAMISETA-001-ROJO-M\",\n  \"item_name\": \"Camiseta Básica - Rojo - M\",\n  \"item_group\": \"Prendas de Vestir\",\n  \"stock_uom\": \"Nos\",\n  \"is_stock_item\": 1,\n  \"is_sales_item\": 1,\n  \"is_purchase_item\": 0,\n  \"has_variants\": 0,\n  \"variant_of\": \"CAMISETA-001\",\n  \"attributes\": [\n    {\n      \"attribute\": \"Color\",\n      \"attribute_value\": \"Rojo\"\n    },\n    {\n      \"attribute\": \"Talla\",\n      \"attribute_value\": \"M\"\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/resource/Item",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Item"]
+            },
+            "description": "Crea una variante de ítem con Color y Talla específicos.\n\n⚠️ PREREQUISITOS:\n- El ítem plantilla (variant_of) debe existir con has_variants=1\n- Los atributos 'Color' y 'Talla' deben existir en ERPNext\n- Los valores 'Rojo' y 'M' deben estar configurados en esos atributos\n- item_group debe existir\n\n✅ Respuesta (200/201): documento del ítem creado.\n❌ Ya existe (409): DuplicateEntryError\n❌ Template no existe (417): LinkValidationError"
+          }
+        },
+        {
+          "name": "12. Listar precios de un ítem variante",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/resource/Item Price?fields=[\"name\",\"item_code\",\"price_list\",\"price_list_rate\",\"currency\",\"valid_from\"]&filters=[[\"Item Price\",\"item_code\",\"=\",\"{{item_variant_code}}\"],[\"Item Price\",\"selling\",\"=\",1]]",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Item Price"],
+              "query": [
+                { "key": "fields", "value": "[\"name\",\"item_code\",\"price_list\",\"price_list_rate\",\"currency\",\"valid_from\"]" },
+                { "key": "filters", "value": "[[\"Item Price\",\"item_code\",\"=\",\"{{item_variant_code}}\"],[\"Item Price\",\"selling\",\"=\",1]]" }
+              ]
+            },
+            "description": "Obtiene los precios de venta configurados para una variante específica.\n\nUsa esto para saber el 'rate' correcto al crear órdenes de venta."
+          }
+        },
+        {
+          "name": "13. Listar atributos disponibles (Color, Talla)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/resource/Item Attribute?fields=[\"name\",\"attribute_name\"]",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Item Attribute"],
+              "query": [
+                { "key": "fields", "value": "[\"name\",\"attribute_name\"]" }
+              ]
+            },
+            "description": "Lista los atributos configurados en ERPNext (Color, Talla, etc). Útil para saber los nombres exactos a usar al crear variantes."
+          }
+        },
+        {
+          "name": "14. Listar valores de un atributo (ej: colores disponibles)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/resource/Item Attribute Value?fields=[\"name\",\"attribute_value\",\"parent\"]&filters=[[\"Item Attribute Value\",\"parent\",\"=\",\"Color\"]]",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Item Attribute Value"],
+              "query": [
+                { "key": "fields", "value": "[\"name\",\"attribute_value\",\"parent\"]" },
+                { "key": "filters", "value": "[[\"Item Attribute Value\",\"parent\",\"=\",\"Color\"]]" }
+              ]
+            },
+            "description": "Lista los valores posibles para el atributo 'Color'. Cambia el filtro a 'Talla' para ver las tallas.\n\n✅ Respuesta:\n{\n  \"data\": [\n    { \"attribute_value\": \"Rojo\", \"parent\": \"Color\" },\n    { \"attribute_value\": \"Azul\", \"parent\": \"Color\" },\n    { \"attribute_value\": \"Negro\", \"parent\": \"Color\" }\n  ]\n}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "🛒 Órdenes de Venta",
+      "item": [
+        {
+          "name": "15. Listar órdenes de venta",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/resource/Sales Order?fields=[\"name\",\"customer\",\"customer_name\",\"transaction_date\",\"delivery_date\",\"status\",\"grand_total\",\"currency\",\"docstatus\"]&filters=[[\"Sales Order\",\"docstatus\",\"!=\",2]]&order_by=transaction_date%20desc&limit_page_length=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Sales Order"],
+              "query": [
+                { "key": "fields", "value": "[\"name\",\"customer\",\"customer_name\",\"transaction_date\",\"delivery_date\",\"status\",\"grand_total\",\"currency\",\"docstatus\"]" },
+                { "key": "filters", "value": "[[\"Sales Order\",\"docstatus\",\"!=\",2]]" },
+                { "key": "order_by", "value": "transaction_date desc" },
+                { "key": "limit_page_length", "value": "20" }
+              ]
+            },
+            "description": "Lista órdenes de venta excluyendo las canceladas (docstatus=2).\n\ndocstatus: 0=Borrador, 1=Confirmada, 2=Cancelada\nstatus: Draft, To Deliver and Bill, To Bill, To Deliver, Completed, Cancelled, Closed"
+          }
+        },
+        {
+          "name": "16. Listar órdenes por cliente",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/resource/Sales Order?fields=[\"name\",\"customer\",\"transaction_date\",\"status\",\"grand_total\",\"docstatus\"]&filters=[[\"Sales Order\",\"customer\",\"=\",\"{{customer_name}}\"],[\"Sales Order\",\"docstatus\",\"!=\",2]]&order_by=transaction_date%20desc",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Sales Order"],
+              "query": [
+                { "key": "fields", "value": "[\"name\",\"customer\",\"transaction_date\",\"status\",\"grand_total\",\"docstatus\"]" },
+                { "key": "filters", "value": "[[\"Sales Order\",\"customer\",\"=\",\"{{customer_name}}\"],[\"Sales Order\",\"docstatus\",\"!=\",2]]" },
+                { "key": "order_by", "value": "transaction_date desc" }
+              ]
+            },
+            "description": "Filtra órdenes por un cliente específico. Útil para mostrar el historial de pedidos de un cliente en tu sistema externo."
+          }
+        },
+        {
+          "name": "17. Obtener orden de venta por ID (con ítems)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/resource/Sales Order/{{sales_order_name}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Sales Order", "{{sales_order_name}}"]
+            },
+            "description": "Obtiene el detalle completo de una orden incluyendo el array 'items' con todas las líneas.\n\n✅ Respuesta:\n{\n  \"data\": {\n    \"name\": \"SO-2026-00001\",\n    \"customer\": \"CUST-0001\",\n    \"status\": \"To Deliver and Bill\",\n    \"grand_total\": 170000,\n    \"items\": [\n      {\n        \"item_code\": \"CAMISETA-001-ROJO-M\",\n        \"qty\": 2,\n        \"rate\": 45000,\n        \"amount\": 90000\n      }\n    ]\n  }\n}"
+          }
+        },
+        {
+          "name": "18. Crear orden de venta (BORRADOR)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"doctype\": \"Sales Order\",\n  \"customer\": \"{{customer_name}}\",\n  \"transaction_date\": \"2026-06-29\",\n  \"delivery_date\": \"2026-07-06\",\n  \"order_type\": \"Sales\",\n  \"currency\": \"COP\",\n  \"selling_price_list\": \"Standard Selling\",\n  \"items\": [\n    {\n      \"item_code\": \"CAMISETA-001-ROJO-M\",\n      \"qty\": 2,\n      \"rate\": 45000,\n      \"delivery_date\": \"2026-07-06\"\n    },\n    {\n      \"item_code\": \"CAMISETA-001-AZUL-L\",\n      \"qty\": 1,\n      \"rate\": 45000,\n      \"delivery_date\": \"2026-07-06\"\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/resource/Sales Order",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Sales Order"]
+            },
+            "description": "Crea una orden de venta en estado BORRADOR (docstatus=0).\n\nEn borrador NO afecta inventario ni contabilidad. Debes confirmarla con el endpoint 19.\n\n⚠️ PREREQUISITOS:\n- El cliente debe existir\n- Cada item_code debe existir (variante, no plantilla)\n- selling_price_list debe existir\n- currency debe coincidir con la configuración\n\n✅ Respuesta: documento creado con 'name' asignado (ej: SO-2026-00001)\n❌ Cliente no existe (417): LinkValidationError\n❌ Ítem no existe (417): LinkValidationError"
+          }
+        },
+        {
+          "name": "19. Confirmar orden de venta (Submit)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"docstatus\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/resource/Sales Order/{{sales_order_name}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Sales Order", "{{sales_order_name}}"]
+            },
+            "description": "Confirma (somete) una orden de venta. Cambia docstatus de 0 a 1.\n\nUna vez confirmada:\n- Afecta el inventario reservado\n- Aparece en reportes de ventas\n- Se puede generar entrega y factura\n- NO se puede editar directamente (solo cancelar)\n\n⚠️ Una orden confirmada NO se puede volver a borrador.\n✅ Respuesta (200): documento con docstatus=1 y status='To Deliver and Bill'"
+          }
+        },
+        {
+          "name": "20. Cancelar orden de venta",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"docstatus\": 2\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/resource/Sales Order/{{sales_order_name}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Sales Order", "{{sales_order_name}}"]
+            },
+            "description": "Cancela una orden de venta. Solo se puede cancelar si está confirmada (docstatus=1) y no tiene documentos derivados (entregas, facturas) pendientes.\n\n⚠️ La cancelación es permanente. Si necesitas reabrir, deberás crear una nueva orden."
+          }
+        },
+        {
+          "name": "21. Actualizar orden (solo en BORRADOR)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"delivery_date\": \"2026-07-10\",\n  \"items\": [\n    {\n      \"item_code\": \"CAMISETA-001-ROJO-M\",\n      \"qty\": 3,\n      \"rate\": 45000,\n      \"delivery_date\": \"2026-07-10\"\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/resource/Sales Order/{{sales_order_name}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Sales Order", "{{sales_order_name}}"]
+            },
+            "description": "Actualiza una orden de venta. Solo funciona si está en BORRADOR (docstatus=0).\n\nAl enviar 'items', reemplaza TODA la tabla de ítems, así que debes enviar todos los ítems de la orden.\n\n❌ Si está confirmada (docstatus=1), retorna error de permisos."
+          }
+        }
+      ]
+    },
+    {
+      "name": "📋 Referencia y Catálogos",
+      "item": [
+        {
+          "name": "22. Listar listas de precios activas",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/resource/Price List?fields=[\"name\",\"currency\",\"selling\",\"buying\",\"enabled\"]&filters=[[\"Price List\",\"selling\",\"=\",1],[\"Price List\",\"enabled\",\"=\",1]]",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Price List"],
+              "query": [
+                { "key": "fields", "value": "[\"name\",\"currency\",\"selling\",\"buying\",\"enabled\"]" },
+                { "key": "filters", "value": "[[\"Price List\",\"selling\",\"=\",1],[\"Price List\",\"enabled\",\"=\",1]]" }
+              ]
+            },
+            "description": "Lista las listas de precios de venta activas. El 'name' de la lista es lo que va en 'selling_price_list' al crear órdenes."
+          }
+        },
+        {
+          "name": "23. Listar territorios disponibles",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/resource/Territory?fields=[\"name\",\"parent_territory\",\"is_group\"]",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Territory"],
+              "query": [
+                { "key": "fields", "value": "[\"name\",\"parent_territory\",\"is_group\"]" }
+              ]
+            },
+            "description": "Lista los territorios configurados. Necesario para el campo 'territory' al crear clientes."
+          }
+        },
+        {
+          "name": "24. Listar grupos de ítems",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "{{auth}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/resource/Item Group?fields=[\"name\",\"parent_item_group\",\"is_group\"]",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resource", "Item Group"],
+              "query": [
+                { "key": "fields", "value": "[\"name\",\"parent_item_group\",\"is_group\"]" }
+              ]
+            },
+            "description": "Lista los grupos de ítem disponibles. Necesario para el campo 'item_group' al crear productos/variantes."
+          }
+        }
+      ]
+    }
+  ]
+}

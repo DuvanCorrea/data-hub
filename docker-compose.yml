@@ -62,6 +62,29 @@ services:
       - ./frontend:/app            # hot reload en dev
       - /app/node_modules          # evitar que el bind-mount pise node_modules
 
+  # ── ERP Sync (Node.js microservicio) ──────────────────────────
+  erp-sync:
+    build:
+      context: ./erp-sync
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-datahub}
+      DB_USERNAME: ${DB_USERNAME:-datahub_user}
+      DB_PASSWORD: ${DB_PASSWORD:-changeme_db}
+      DB_POOL_MAX: ${ERP_SYNC_DB_POOL_MAX:-10}
+      ERP_SYNC_PORT: ${ERP_SYNC_PORT:-3001}
+      NODE_ENV: ${NODE_ENV:-production}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+    ports:
+      - "${ERP_SYNC_PORT:-3001}:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   db_data:
   files_data:

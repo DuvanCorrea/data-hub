@@ -1,13 +1,15 @@
 import { Pool, PoolConfig } from 'pg';
 
+// Usa variables con prefijo ERP_SYNC_DB_ para no colisionar
+// con las variables del backend Spring Boot (DB_HOST, DB_NAME, etc.)
 const config: PoolConfig = {
-  host: process.env.DB_HOST ?? 'localhost',
-  port: parseInt(process.env.DB_PORT ?? '5432', 10),
-  database: process.env.DB_NAME ?? 'datahub',
-  user: process.env.DB_USERNAME ?? 'datahub_user',
-  password: process.env.DB_PASSWORD ?? '',
-  max: parseInt(process.env.DB_POOL_MAX ?? '10', 10),
-  idleTimeoutMillis: 30_000,
+  host:     process.env.ERP_SYNC_DB_HOST     ?? 'localhost',
+  port:     parseInt(process.env.ERP_SYNC_DB_PORT ?? '5433', 10),
+  database: process.env.ERP_SYNC_DB_NAME     ?? 'erpsync',
+  user:     process.env.ERP_SYNC_DB_USER     ?? 'erpsync_user',
+  password: process.env.ERP_SYNC_DB_PASSWORD ?? '',
+  max:      parseInt(process.env.ERP_SYNC_DB_POOL_MAX ?? '10', 10),
+  idleTimeoutMillis:    30_000,
   connectionTimeoutMillis: 5_000,
 };
 
